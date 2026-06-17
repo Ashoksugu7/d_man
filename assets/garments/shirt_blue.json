@@ -1,0 +1,67 @@
+{
+  "id": "shirt_blue",
+  "keypoints_px": {
+    "collar": [
+      300.0,
+      110
+    ],
+    "left_shoulder": [
+      180,
+      150
+    ],
+    "right_shoulder": [
+      420,
+      150
+    ],
+    "left_sleeve": [
+      70,
+      300
+    ],
+    "right_sleeve": [
+      530,
+      300
+    ],
+    "left_hem": [
+      185,
+      620
+    ],
+    "right_hem": [
+      415,
+      620
+    ]
+  },
+  "keypoints_norm": {
+    "collar": [
+      0.5,
+      0.1571
+    ],
+    "left_shoulder": [
+      0.3,
+      0.2143
+    ],
+    "right_shoulder": [
+      0.7,
+      0.2143
+    ],
+    "left_sleeve": [
+      0.1167,
+      0.4286
+    ],
+    "right_sleeve": [
+      0.8833,
+      0.4286
+    ],
+    "left_hem": [
+      0.3083,
+      0.8857
+    ],
+    "right_hem": [
+      0.6917,
+      0.8857
+    ]
+  },
+  "canvas": [
+    600,
+    700
+  ]
+}

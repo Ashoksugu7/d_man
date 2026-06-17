@@ -1,0 +1,21 @@
+# Node / Next
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated try-on results (runtime output)
+backend/storage/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store

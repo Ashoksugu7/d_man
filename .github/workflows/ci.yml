@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "sprint/**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+      - name: Run pipeline smoke test
+        run: python backend/test_pipeline.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install & build
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build
+
+  # Staging deploy runs only on main after build passes.
+  # Fill in DEPLOY_* secrets and a real deploy step (Vercel/Fly/Render/SSH) to enable.
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging (placeholder)
+        run: echo "TODO: wire up staging deploy (Vercel/Fly/Render). See DEPLOY.md"

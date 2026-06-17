@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./assets:/assets:ro
+      - backend_results:/app/storage/results
+    environment:
+      - ASSETS_DIR=/assets
+      - RESULTS_DIR=/app/storage/results
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  backend_results:
