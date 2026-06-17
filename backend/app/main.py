@@ -49,10 +49,25 @@ def _load_catalog():
     return json.loads(path.read_text())
 
 
-def _load_garment_keypoints(garment: dict) -> Dict[str, Tuple[float, float]]:
+def _load_garment_keypoints(
+    garment: dict, img_w: int, img_h: int
+) -> Dict[str, Tuple[float, float]]:
+    """Return garment keypoints in pixels for the *actual* image size.
+
+    Prefers normalized keypoints (resolution-independent), so the annotation
+    canvas size does not have to match the garment image size. Falls back to
+    raw pixel keypoints, rescaling from the stored canvas if it differs.
+    """
     kp_path = ASSETS_DIR / garment["keypoints"]
     data = json.loads(kp_path.read_text())
-    return {k: (v[0], v[1]) for k, v in data["keypoints_px"].items()}
+
+    if "keypoints_norm" in data:
+        return {k: (v[0] * img_w, v[1] * img_h) for k, v in data["keypoints_norm"].items()}
+
+    # Fallback: rescale pixel keypoints from their stored canvas dimensions.
+    cw, ch = data.get("canvas", [img_w, img_h])
+    sx, sy = img_w / cw, img_h / ch
+    return {k: (v[0] * sx, v[1] * sy) for k, v in data["keypoints_px"].items()}
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +115,7 @@ async def tryon_image(
         raise HTTPException(422, "No person detected in the photo")
 
     garment_img = Image.open(ASSETS_DIR / garment["image"]).convert("RGBA")
+    g_w, g_h = garment_img.size
     garment_rgba = np.array(garment_img)
     # PIL gives RGBA; warp expects channels in BGRA-style only for the BGR
     # slice. Convert RGB->BGR for the color channels, keep alpha.
@@ -107,7 +123,7 @@ async def tryon_image(
         cv2.cvtColor(garment_rgba[:, :, :3], cv2.COLOR_RGB2BGR),
         garment_rgba[:, :, 3],
     ])
-    garment_kp = _load_garment_keypoints(garment)
+    garment_kp = _load_garment_keypoints(garment, g_w, g_h)
 
     result_bgr = warp_and_composite(user_bgr, garment_rgba, garment_kp, body_kp)
 
