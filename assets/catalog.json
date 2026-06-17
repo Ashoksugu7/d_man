@@ -148,5 +148,80 @@
         "length_cm": 77
       }
     }
+  },
+  {
+    "id": "pant_blue",
+    "name": "Slim Blue Jeans",
+    "category": "pant",
+    "image": "garments/pant_blue.png",
+    "keypoints": "garments/pant_blue.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 76,
+        "inseam_cm": 76
+      },
+      "M": {
+        "waist_cm": 81,
+        "inseam_cm": 78
+      },
+      "L": {
+        "waist_cm": 86,
+        "inseam_cm": 80
+      },
+      "XL": {
+        "waist_cm": 91,
+        "inseam_cm": 81
+      }
+    }
+  },
+  {
+    "id": "pant_khaki",
+    "name": "Khaki Chinos",
+    "category": "pant",
+    "image": "garments/pant_khaki.png",
+    "keypoints": "garments/pant_khaki.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 76,
+        "inseam_cm": 76
+      },
+      "M": {
+        "waist_cm": 81,
+        "inseam_cm": 78
+      },
+      "L": {
+        "waist_cm": 86,
+        "inseam_cm": 80
+      },
+      "XL": {
+        "waist_cm": 91,
+        "inseam_cm": 81
+      }
+    }
+  },
+  {
+    "id": "pant_black",
+    "name": "Black Trousers",
+    "category": "pant",
+    "image": "garments/pant_black.png",
+    "keypoints": "garments/pant_black.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 76,
+        "inseam_cm": 76
+      },
+      "M": {
+        "waist_cm": 81,
+        "inseam_cm": 78
+      },
+      "L": {
+        "waist_cm": 86,
+        "inseam_cm": 80
+      },
+      "XL": {
+        "waist_cm": 91,
+        "inseam_cm": 81
+      }
+    }
   }
 ]

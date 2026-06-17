@@ -21,6 +21,10 @@ _LM = {
     "right_shoulder": 12,
     "left_hip": 23,
     "right_hip": 24,
+    "left_knee": 25,
+    "right_knee": 26,
+    "left_ankle": 27,
+    "right_ankle": 28,
     "nose": 0,
 }
 
@@ -45,12 +49,16 @@ def estimate_body_keypoints(image_rgb: np.ndarray) -> Optional[Dict[str, Tuple[f
         lm = res.pose_landmarks.landmark
         pts = {name: (lm[idx].x * w, lm[idx].y * h) for name, idx in _LM.items()}
     else:
-        # Heuristic fallback: assume a centered, upright person.
+        # Heuristic fallback: assume a centered, upright, full-body person.
         pts = {
             "left_shoulder": (w * 0.62, h * 0.28),
             "right_shoulder": (w * 0.38, h * 0.28),
             "left_hip": (w * 0.58, h * 0.62),
             "right_hip": (w * 0.42, h * 0.62),
+            "left_knee": (w * 0.56, h * 0.80),
+            "right_knee": (w * 0.44, h * 0.80),
+            "left_ankle": (w * 0.55, h * 0.96),
+            "right_ankle": (w * 0.45, h * 0.96),
             "nose": (w * 0.5, h * 0.15),
         }
 
@@ -58,13 +66,17 @@ def estimate_body_keypoints(image_rgb: np.ndarray) -> Optional[Dict[str, Tuple[f
         (pts["left_shoulder"][0] + pts["right_shoulder"][0]) / 2,
         (pts["left_shoulder"][1] + pts["right_shoulder"][1]) / 2,
     )
-    return {
+    out = {
         "left_shoulder": pts["left_shoulder"],
         "right_shoulder": pts["right_shoulder"],
         "left_hip": pts["left_hip"],
         "right_hip": pts["right_hip"],
         "neck": neck,
     }
+    for k in ("left_knee", "right_knee", "left_ankle", "right_ankle"):
+        if k in pts:
+            out[k] = pts[k]
+    return out
 
 
 def mediapipe_available() -> bool:

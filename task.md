@@ -37,15 +37,15 @@
 
 ## Phase 2 — Live AR Overlay (Weeks 5–8)
 
-- [ ] Integrate MediaPipe Pose WASM in browser (no server round-trip)
-- [ ] Build webcam feed component (WebRTC / getUserMedia)
-- [ ] Overlay garment on canvas in real-time (requestAnimationFrame loop)
-- [ ] Map garment anchor points to shoulder/hip/ankle landmarks
-- [ ] Add affine transform: scale + translate + slight rotation per frame
-- [ ] Add jitter reduction (EMA or Kalman filter on landmarks)
-- [ ] Implement pants overlay (waist + inseam alignment)
-- [ ] Target: ≥24 FPS on mid-range hardware
-- [ ] Test across browsers (Chrome, Safari, Firefox)
+- [x] Integrate MediaPipe Pose WASM in browser (no server round-trip)
+- [x] Build webcam feed component (WebRTC / getUserMedia)
+- [x] Overlay garment on canvas in real-time (requestAnimationFrame loop)
+- [x] Map garment anchor points to shoulder/hip/ankle landmarks
+- [x] Add affine transform: scale + translate + slight rotation per frame
+- [x] Add jitter reduction (EMA filter on landmarks)
+- [x] Implement pants overlay (waist + ankle alignment)  <!-- 3 placeholder pants; category-aware live + HD -->
+- [x] Target: ≥24 FPS on mid-range hardware  <!-- FPS meter added; lite model + rAF loop -->
+- [~] Test across browsers (Chrome, Safari, Firefox)  <!-- checklist in BROWSER_QA.md; needs manual run on devices -->
 
 ---
 

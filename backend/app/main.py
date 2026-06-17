@@ -125,12 +125,15 @@ async def tryon_image(
         garment_rgba[:, :, 3],
     ])
     garment_kp = _load_garment_keypoints(garment, g_w, g_h)
+    category = garment.get("category", "shirt")
 
-    result_bgr = warp_and_composite(user_bgr, garment_rgba, garment_kp, body_kp)
+    result_bgr = warp_and_composite(
+        user_bgr, garment_rgba, garment_kp, body_kp, category
+    )
     if debug:
         # Overlay detected landmarks + target quad so pose vs warp errors are
         # distinguishable.
-        result_bgr = draw_debug(result_bgr, body_kp)
+        result_bgr = draw_debug(result_bgr, body_kp, category)
 
     out_id = uuid.uuid4().hex[:12]
     out_name = f"{out_id}.{out_fmt}"
