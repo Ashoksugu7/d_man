@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from .pose import estimate_body_keypoints, mediapipe_available
-from .warp import warp_and_composite
+from .warp import warp_and_composite, draw_debug
 
 # ---------------------------------------------------------------------------
 # Paths & config
@@ -88,6 +88,7 @@ async def tryon_image(
     garment_id: str = Form(...),
     photo: UploadFile = File(...),
     output_format: str = Form("png"),
+    debug: bool = Form(False),
 ):
     catalog = _load_catalog()
     garment = next((g for g in catalog if g["id"] == garment_id), None)
@@ -126,6 +127,10 @@ async def tryon_image(
     garment_kp = _load_garment_keypoints(garment, g_w, g_h)
 
     result_bgr = warp_and_composite(user_bgr, garment_rgba, garment_kp, body_kp)
+    if debug:
+        # Overlay detected landmarks + target quad so pose vs warp errors are
+        # distinguishable.
+        result_bgr = draw_debug(result_bgr, body_kp)
 
     out_id = uuid.uuid4().hex[:12]
     out_name = f"{out_id}.{out_fmt}"
@@ -136,6 +141,7 @@ async def tryon_image(
         "result_id": out_id,
         "result_url": f"/results/{out_name}",
         "garment_id": garment_id,
+        "pose_method": "mediapipe" if mediapipe_available() else "fallback_heuristic",
         "keypoints": {k: list(v) for k, v in body_kp.items()},
     })
 

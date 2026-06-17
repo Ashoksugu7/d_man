@@ -11,11 +11,13 @@ export async function fetchGarments(): Promise<Garment[]> {
 
 export async function requestTryOn(
   garmentId: string,
-  photo: File
+  photo: File,
+  debug = false
 ): Promise<TryOnResult> {
   const form = new FormData();
   form.append("garment_id", garmentId);
   form.append("photo", photo);
+  if (debug) form.append("debug", "true");
   const res = await fetch(`${API_BASE}/api/tryon/image`, {
     method: "POST",
     body: form,

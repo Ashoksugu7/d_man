@@ -13,6 +13,7 @@ export type TryOnResult = {
   result_id: string;
   result_url: string;
   garment_id: string;
+  pose_method?: string;
 };
 
 type State = {
