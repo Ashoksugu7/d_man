@@ -51,7 +51,7 @@ export default function PhotoUpload() {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp,image/*"
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />

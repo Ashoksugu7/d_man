@@ -75,7 +75,7 @@ export default function ResultView() {
       {result && (
         <a
           href={resultUrl(result.result_url)}
-          download={`tryon-${result.result_id}.png`}
+          download={`tryon-${result.result_id}.${result.result_url.split(".").pop() || "png"}`}
           className="mt-3 inline-block rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
         >
           Download result

@@ -66,6 +66,13 @@ TPS warping, human parsing, and diffusion try-on come in later phases.
 python backend/test_pipeline.py   # synthetic person → overlay → assertion
 ```
 
+## Image formats
+
+PNG, JPEG, and **WebP** are supported for both uploaded photos and garment
+assets (libwebp ships with Pillow and OpenCV). WebP garments may keep an alpha
+channel for transparency. Results are PNG by default; pass `output_format=webp`
+to `POST /api/tryon/image` for smaller WebP output.
+
 ## Replace placeholder garments
 
 `assets/generate_shirts.py` produces simple flat-color shirts so the demo runs

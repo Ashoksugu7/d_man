@@ -40,7 +40,7 @@
 <div class="wrap">
   <div class="panel">
     <div class="row" style="margin-bottom:10px; align-items:center;">
-      <input type="file" id="file" accept="image/png,image/*" style="flex:1;" />
+      <input type="file" id="file" accept="image/png,image/webp,image/jpeg,image/*" style="flex:1;" />
       <button id="undo">Undo last (U)</button>
       <button id="reset">Reset points</button>
       <span class="pill" id="zoomlbl">100%</span>
@@ -69,7 +69,7 @@
       <button id="dlcat" disabled>Download catalog snippet</button>
       <button id="copy" disabled>Copy JSON</button>
     </div>
-    <p class="hint">Save the PNG as <code>assets/garments/&lt;id&gt;.png</code>, the JSON as <code>assets/garments/&lt;id&gt;.json</code>, and merge the catalog snippet into <code>assets/catalog.json</code>.</p>
+    <p class="hint">Save the image as <code>assets/garments/&lt;id&gt;.&lt;ext&gt;</code> (png or webp, transparent background), the JSON as <code>assets/garments/&lt;id&gt;.json</code>, and merge the catalog snippet into <code>assets/catalog.json</code>. The snippet's <code>image</code> path matches the file you loaded.</p>
 
     <label style="margin-top:14px;">Preview output</label>
     <pre id="out">{ }</pre>
@@ -90,6 +90,7 @@ const HINTS = {
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 let img = null, imgW = 0, imgH = 0, scale = 1;
 let points = {};   // name -> {x,y} in image pixel coords
+let imgExt = "png"; // real extension of the loaded file (png | webp | jpg ...)
 
 const $ = id => document.getElementById(id);
 
@@ -153,7 +154,7 @@ function buildCatalog() {
     id,
     name: $("gname").value || id,
     category: $("gcat").value,
-    image: `garments/${id}.png`,
+    image: `garments/${id}.${imgExt}`,
     keypoints: `garments/${id}.json`,
     size_chart: {
       S:{shoulder_cm:42,length_cm:68}, M:{shoulder_cm:45,length_cm:71},
@@ -178,6 +179,8 @@ function download(name, obj) {
 
 $("file").addEventListener("change", e => {
   const f = e.target.files[0]; if (!f) return;
+  const m = f.name.match(/\.([^.]+)$/);
+  imgExt = (m ? m[1] : "png").toLowerCase();
   const im = new Image();
   im.onload = () => { img=im; imgW=im.naturalWidth; imgH=im.naturalHeight; points={}; fitScale(); draw(); renderList();
     if (!$("gid").value) $("gid").value = f.name.replace(/\.[^.]+$/,""); };

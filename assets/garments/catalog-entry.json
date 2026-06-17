@@ -1,0 +1,25 @@
+{
+  "id": "green shirts",
+  "name": "casual cotton green t shirt",
+  "category": "tshirt",
+  "image": "garments/green shirts.png",
+  "keypoints": "garments/green shirts.json",
+  "size_chart": {
+    "S": {
+      "shoulder_cm": 42,
+      "length_cm": 68
+    },
+    "M": {
+      "shoulder_cm": 45,
+      "length_cm": 71
+    },
+    "L": {
+      "shoulder_cm": 48,
+      "length_cm": 74
+    },
+    "XL": {
+      "shoulder_cm": 51,
+      "length_cm": 77
+    }
+  }
+}

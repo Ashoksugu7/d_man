@@ -54,5 +54,38 @@ def main():
     print("PASS - result written to storage/results/test_result.png")
 
 
+def test_webp():
+    """webp garment + webp user photo should flow through identically."""
+    from PIL import features
+    assert features.check("webp"), "libwebp not available in Pillow"
+
+    # webp user photo
+    user_rgb = make_person()
+    Image.fromarray(user_rgb).save("/tmp/_user.webp", "WEBP")
+    reload_rgb = np.array(Image.open("/tmp/_user.webp").convert("RGB"))
+    user_bgr = cv2.cvtColor(reload_rgb, cv2.COLOR_RGB2BGR)
+    body_kp = estimate_body_keypoints(reload_rgb)
+    assert body_kp is not None
+
+    # webp garment (with alpha)
+    g = Image.open(os.path.join(ASSETS, "garments", "shirt_blue.png")).convert("RGBA")
+    g.save("/tmp/_g.webp", "WEBP")
+    g_arr = np.array(Image.open("/tmp/_g.webp").convert("RGBA"))
+    assert g_arr.shape[2] == 4, "webp garment lost alpha"
+    garment_rgba = np.dstack([cv2.cvtColor(g_arr[:, :, :3], cv2.COLOR_RGB2BGR), g_arr[:, :, 3]])
+
+    import json
+    kp = json.load(open(os.path.join(ASSETS, "garments", "shirt_blue.json")))
+    garment_kp = {k: (v[0], v[1]) for k, v in kp["keypoints_px"].items()}
+
+    result = warp_and_composite(user_bgr, garment_rgba, garment_kp, body_kp)
+
+    # webp output round-trips
+    ok = cv2.imwrite("/tmp/_out.webp", result, [cv2.IMWRITE_WEBP_QUALITY, 90])
+    assert ok and os.path.exists("/tmp/_out.webp"), "webp output failed"
+    print("PASS - webp input + webp output round-trip OK")
+
+
 if __name__ == "__main__":
     main()
+    test_webp()

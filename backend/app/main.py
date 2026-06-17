@@ -69,17 +69,28 @@ def garments():
 
 
 @app.post("/api/tryon/image")
-async def tryon_image(garment_id: str = Form(...), photo: UploadFile = File(...)):
+async def tryon_image(
+    garment_id: str = Form(...),
+    photo: UploadFile = File(...),
+    output_format: str = Form("png"),
+):
     catalog = _load_catalog()
     garment = next((g for g in catalog if g["id"] == garment_id), None)
     if garment is None:
         raise HTTPException(404, f"Unknown garment_id: {garment_id}")
 
+    out_fmt = output_format.lower()
+    if out_fmt not in ("png", "webp"):
+        raise HTTPException(400, "output_format must be 'png' or 'webp'")
+
     raw = await photo.read()
     try:
+        # PIL decodes png / jpg / webp transparently (libwebp bundled).
         pil = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception:
-        raise HTTPException(400, "Could not read uploaded image")
+        raise HTTPException(
+            400, "Could not read uploaded image (supported: PNG, JPEG, WebP)"
+        )
 
     user_rgb = np.array(pil)
     user_bgr = cv2.cvtColor(user_rgb, cv2.COLOR_RGB2BGR)
@@ -101,8 +112,9 @@ async def tryon_image(garment_id: str = Form(...), photo: UploadFile = File(...)
     result_bgr = warp_and_composite(user_bgr, garment_rgba, garment_kp, body_kp)
 
     out_id = uuid.uuid4().hex[:12]
-    out_name = f"{out_id}.png"
-    cv2.imwrite(str(RESULTS_DIR / out_name), result_bgr)
+    out_name = f"{out_id}.{out_fmt}"
+    write_params = [cv2.IMWRITE_WEBP_QUALITY, 90] if out_fmt == "webp" else []
+    cv2.imwrite(str(RESULTS_DIR / out_name), result_bgr, write_params)
 
     return JSONResponse({
         "result_id": out_id,
@@ -114,7 +126,8 @@ async def tryon_image(garment_id: str = Form(...), photo: UploadFile = File(...)
 
 @app.get("/api/result/{result_id}")
 def get_result(result_id: str):
-    path = RESULTS_DIR / f"{result_id}.png"
-    if not path.exists():
-        raise HTTPException(404, "Result not found")
-    return FileResponse(str(path), media_type="image/png")
+    for ext, mime in (("png", "image/png"), ("webp", "image/webp")):
+        path = RESULTS_DIR / f"{result_id}.{ext}"
+        if path.exists():
+            return FileResponse(str(path), media_type=mime)
+    raise HTTPException(404, "Result not found")

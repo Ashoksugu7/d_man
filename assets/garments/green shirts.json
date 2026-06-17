@@ -1,0 +1,67 @@
+{
+  "id": "green shirts",
+  "keypoints_px": {
+    "collar": [
+      394,
+      65
+    ],
+    "left_shoulder": [
+      138,
+      140
+    ],
+    "right_shoulder": [
+      652,
+      140
+    ],
+    "left_sleeve": [
+      52,
+      351
+    ],
+    "right_sleeve": [
+      745,
+      350
+    ],
+    "left_hem": [
+      212,
+      816
+    ],
+    "right_hem": [
+      585,
+      815
+    ]
+  },
+  "keypoints_norm": {
+    "collar": [
+      0.4925,
+      0.073
+    ],
+    "left_shoulder": [
+      0.1725,
+      0.1566
+    ],
+    "right_shoulder": [
+      0.815,
+      0.1566
+    ],
+    "left_sleeve": [
+      0.065,
+      0.3918
+    ],
+    "right_sleeve": [
+      0.9313,
+      0.3907
+    ],
+    "left_hem": [
+      0.265,
+      0.9102
+    ],
+    "right_hem": [
+      0.7312,
+      0.9091
+    ]
+  },
+  "canvas": [
+    800,
+    897
+  ]
+}

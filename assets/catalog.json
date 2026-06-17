@@ -1,5 +1,30 @@
 [
   {
+  "id": "wt",
+  "name": "casual cotton green t shirt",
+  "category": "tshirt",
+  "image": "garments/wt.png",
+  "keypoints": "garments/wt.json",
+  "size_chart": {
+    "S": {
+      "shoulder_cm": 42,
+      "length_cm": 68
+    },
+    "M": {
+      "shoulder_cm": 45,
+      "length_cm": 71
+    },
+    "L": {
+      "shoulder_cm": 48,
+      "length_cm": 74
+    },
+    "XL": {
+      "shoulder_cm": 51,
+      "length_cm": 77
+    }
+  }
+},
+  {
     "id": "shirt_red",
     "name": "Classic Red Tee",
     "category": "shirt",
