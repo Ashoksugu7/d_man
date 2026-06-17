@@ -4,11 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { assetUrl } from "@/lib/api";
 
-// Garment keypoints are baked into the JSON; for the live overlay we only
-// need the normalized shoulder + hem anchors. We hardcode the canvas-relative
-// anchors that match assets/generate_shirts.py so we avoid an extra fetch.
-const GARMENT_ANCHORS = {
-  // normalized within the garment PNG (W=600,H=700)
+// Normalized garment anchors (0..1 within the PNG). Loaded per-garment from
+// its keypoint JSON so real garments with any proportions align correctly.
+type Anchors = {
+  right_shoulder: [number, number];
+  left_shoulder: [number, number];
+  hem_mid: [number, number];
+};
+
+// Fallback matches assets/generate_shirts.py in case the JSON can't be loaded.
+const FALLBACK_ANCHORS: Anchors = {
   right_shoulder: [0.3, 0.2143],
   left_shoulder: [0.7, 0.2143],
   hem_mid: [0.5, 0.8857],
@@ -25,18 +30,36 @@ export default function LivePreview() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const garmentImgRef = useRef<HTMLImageElement | null>(null);
+  const anchorsRef = useRef<Anchors>(FALLBACK_ANCHORS);
   const rafRef = useRef<number | null>(null);
   const landmarkerRef = useRef<any>(null);
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState("");
 
-  // Preload the selected garment image for canvas drawing
+  // Preload the selected garment image + its keypoint anchors for drawing
   useEffect(() => {
     if (!selectedGarment) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = assetUrl(selectedGarment.image);
     img.onload = () => (garmentImgRef.current = img);
+
+    anchorsRef.current = FALLBACK_ANCHORS;
+    fetch(assetUrl(selectedGarment.keypoints))
+      .then((r) => r.json())
+      .then((j) => {
+        const n = j.keypoints_norm;
+        if (!n) return;
+        anchorsRef.current = {
+          right_shoulder: n.right_shoulder,
+          left_shoulder: n.left_shoulder,
+          hem_mid: [
+            (n.left_hem[0] + n.right_hem[0]) / 2,
+            (n.left_hem[1] + n.right_hem[1]) / 2,
+          ],
+        };
+      })
+      .catch(() => {});
   }, [selectedGarment]);
 
   async function start() {
@@ -118,8 +141,9 @@ export default function LivePreview() {
     // Garment anchor pixels in source image space
     const gw = g.width;
     const gh = g.height;
-    const gRS = { x: GARMENT_ANCHORS.right_shoulder[0] * gw, y: GARMENT_ANCHORS.right_shoulder[1] * gh };
-    const gLS = { x: GARMENT_ANCHORS.left_shoulder[0] * gw, y: GARMENT_ANCHORS.left_shoulder[1] * gh };
+    const a = anchorsRef.current;
+    const gRS = { x: a.right_shoulder[0] * gw, y: a.right_shoulder[1] * gh };
+    const gLS = { x: a.left_shoulder[0] * gw, y: a.left_shoulder[1] * gh };
 
     // Affine: scale from shoulder distance, rotate to shoulder line,
     // translate to shoulder midpoint.

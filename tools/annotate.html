@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Garment Keypoint Annotator</title>
+<style>
+  :root { --line:#e2e2e6; --accent:#2563eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; color:#18181b; background:#fafafa; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px; }
+  header h1 { margin:0; font-size:16px; }
+  header p { margin:2px 0 0; color:#71717a; font-size:13px; }
+  .wrap { display:grid; grid-template-columns: 1fr 340px; gap:20px; padding:20px; align-items:start; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .canvas-box { position:relative; overflow:auto; max-height:78vh; border:1px solid var(--line); border-radius:10px; background:#f4f4f5; }
+  canvas { display:block; cursor:crosshair; }
+  label { display:block; font-size:12px; color:#52525b; margin:10px 0 3px; }
+  input, select { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:7px; font:inherit; }
+  button { cursor:pointer; border:1px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font:inherit; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  ol.kp { list-style:none; margin:8px 0; padding:0; }
+  ol.kp li { display:flex; justify-content:space-between; align-items:center; padding:5px 8px; border-radius:6px; font-size:13px; }
+  ol.kp li.current { background:#eff6ff; font-weight:600; }
+  ol.kp li.done { color:#16a34a; }
+  ol.kp li .coord { font-variant-numeric:tabular-nums; color:#71717a; font-size:12px; }
+  pre { background:#0b0b0f; color:#e4e4e7; padding:12px; border-radius:8px; overflow:auto; font-size:12px; max-height:240px; }
+  .hint { color:#71717a; font-size:12px; margin:6px 0 0; }
+  .pill { display:inline-block; background:#f4f4f5; border:1px solid var(--line); border-radius:999px; padding:2px 9px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Garment Keypoint Annotator</h1>
+  <p>Load a transparent-background garment PNG, click the 7 points in order, then export the JSON + catalog entry for <code>assets/</code>.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px; align-items:center;">
+      <input type="file" id="file" accept="image/png,image/*" style="flex:1;" />
+      <button id="undo">Undo last (U)</button>
+      <button id="reset">Reset points</button>
+      <span class="pill" id="zoomlbl">100%</span>
+    </div>
+    <div class="canvas-box">
+      <canvas id="cv" width="400" height="500"></canvas>
+    </div>
+    <p class="hint">Click order is shown on the right. The current target is highlighted. Press <b>U</b> to undo.</p>
+  </div>
+
+  <div class="panel">
+    <label>Garment id (filename, no spaces)</label>
+    <input id="gid" placeholder="real_shirt_01" />
+    <label>Display name</label>
+    <input id="gname" placeholder="Linen Casual Shirt" />
+    <label>Category</label>
+    <select id="gcat">
+      <option>shirt</option><option>tshirt</option><option>polo</option>
+      <option>kurta</option><option>pant</option><option>other</option>
+    </select>
+
+    <ol class="kp" id="kplist"></ol>
+
+    <div class="row">
+      <button class="primary" id="dljson" disabled>Download &lt;id&gt;.json</button>
+      <button id="dlcat" disabled>Download catalog snippet</button>
+      <button id="copy" disabled>Copy JSON</button>
+    </div>
+    <p class="hint">Save the PNG as <code>assets/garments/&lt;id&gt;.png</code>, the JSON as <code>assets/garments/&lt;id&gt;.json</code>, and merge the catalog snippet into <code>assets/catalog.json</code>.</p>
+
+    <label style="margin-top:14px;">Preview output</label>
+    <pre id="out">{ }</pre>
+  </div>
+</div>
+
+<script>
+const ORDER = ["collar","left_shoulder","right_shoulder","left_sleeve","right_sleeve","left_hem","right_hem"];
+const HINTS = {
+  collar:"center of the collar / neckline",
+  left_shoulder:"wearer's LEFT shoulder seam (image RIGHT side)",
+  right_shoulder:"wearer's RIGHT shoulder seam (image LEFT side)",
+  left_sleeve:"outer end of left sleeve",
+  right_sleeve:"outer end of right sleeve",
+  left_hem:"bottom-left hem corner",
+  right_hem:"bottom-right hem corner",
+};
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let img = null, imgW = 0, imgH = 0, scale = 1;
+let points = {};   // name -> {x,y} in image pixel coords
+
+const $ = id => document.getElementById(id);
+
+function fitScale() {
+  const maxW = cv.parentElement.clientWidth - 2;
+  scale = Math.min(1, maxW / imgW);
+  cv.width = Math.round(imgW * scale);
+  cv.height = Math.round(imgH * scale);
+  $("zoomlbl").textContent = Math.round(scale * 100) + "%";
+}
+
+function draw() {
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // checkerboard so transparency is visible
+  const s=12;
+  for (let y=0;y<cv.height;y+=s) for (let x=0;x<cv.width;x+=s){
+    ctx.fillStyle=((x/s+y/s)%2)?"#fff":"#ececf0"; ctx.fillRect(x,y,s,s);
+  }
+  if (img) ctx.drawImage(img,0,0,cv.width,cv.height);
+  for (const name of ORDER) {
+    const p = points[name]; if (!p) continue;
+    const x=p.x*scale, y=p.y*scale;
+    ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fillStyle="#2563eb"; ctx.fill();
+    ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle="#1d4ed8"; ctx.font="11px system-ui";
+    ctx.fillText(name, x+8, y-6);
+  }
+}
+
+function nextTarget(){ return ORDER.find(n => !points[n]); }
+
+function renderList() {
+  const cur = nextTarget();
+  $("kplist").innerHTML = ORDER.map(n => {
+    const p = points[n];
+    const cls = p ? "done" : (n===cur ? "current" : "");
+    const coord = p ? `${Math.round(p.x)}, ${Math.round(p.y)}` : HINTS[n];
+    return `<li class="${cls}"><span>${p?"✓ ":""}${n}</span><span class="coord">${coord}</span></li>`;
+  }).join("");
+  updateOutput();
+}
+
+function buildJSON() {
+  const kp_px = {}, kp_norm = {};
+  for (const n of ORDER) {
+    if (!points[n]) return null;
+    kp_px[n] = [Math.round(points[n].x), Math.round(points[n].y)];
+    kp_norm[n] = [ +(points[n].x/imgW).toFixed(4), +(points[n].y/imgH).toFixed(4) ];
+  }
+  return {
+    id: $("gid").value || "garment_id",
+    keypoints_px: kp_px,
+    keypoints_norm: kp_norm,
+    canvas: [imgW, imgH],
+  };
+}
+
+function buildCatalog() {
+  const id = $("gid").value || "garment_id";
+  return {
+    id,
+    name: $("gname").value || id,
+    category: $("gcat").value,
+    image: `garments/${id}.png`,
+    keypoints: `garments/${id}.json`,
+    size_chart: {
+      S:{shoulder_cm:42,length_cm:68}, M:{shoulder_cm:45,length_cm:71},
+      L:{shoulder_cm:48,length_cm:74}, XL:{shoulder_cm:51,length_cm:77}
+    }
+  };
+}
+
+function updateOutput() {
+  const j = buildJSON();
+  const complete = !!j;
+  $("dljson").disabled = $("dlcat").disabled = $("copy").disabled = !complete;
+  $("out").textContent = JSON.stringify(j || {progress:`${Object.keys(points).length}/7 points`}, null, 2);
+}
+
+function download(name, obj) {
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = () => { img=im; imgW=im.naturalWidth; imgH=im.naturalHeight; points={}; fitScale(); draw(); renderList();
+    if (!$("gid").value) $("gid").value = f.name.replace(/\.[^.]+$/,""); };
+  im.src = URL.createObjectURL(f);
+});
+
+cv.addEventListener("click", e => {
+  if (!img) return;
+  const t = nextTarget(); if (!t) return;
+  const r = cv.getBoundingClientRect();
+  points[t] = { x:(e.clientX-r.left)/scale, y:(e.clientY-r.top)/scale };
+  draw(); renderList();
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key==="u"||e.key==="U") undo();
+});
+function undo(){
+  const done = ORDER.filter(n=>points[n]);
+  if (done.length){ delete points[done[done.length-1]]; draw(); renderList(); }
+}
+$("undo").onclick = undo;
+$("reset").onclick = () => { points={}; draw(); renderList(); };
+$("dljson").onclick = () => { const j=buildJSON(); if(j) download(`${j.id}.json`, j); };
+$("dlcat").onclick = () => download("catalog-entry.json", buildCatalog());
+$("copy").onclick = () => navigator.clipboard.writeText($("out").textContent);
+["gid","gname","gcat"].forEach(id => $(id).addEventListener("input", updateOutput));
+window.addEventListener("resize", () => { if(img){ fitScale(); draw(); }});
+
+renderList();
+</script>
+</body>
+</html>
