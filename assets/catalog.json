@@ -1,5 +1,30 @@
 [
   {
+    "id": "sample_real",
+    "name": "Sample Real Shirt",
+    "category": "shirt",
+    "image": "garments/sample_real.jpg",
+    "keypoints": "garments/sample_real.json",
+    "size_chart": {
+      "S": {
+        "shoulder_cm": 42,
+        "length_cm": 68
+      },
+      "M": {
+        "shoulder_cm": 45,
+        "length_cm": 71
+      },
+      "L": {
+        "shoulder_cm": 48,
+        "length_cm": 74
+      },
+      "XL": {
+        "shoulder_cm": 51,
+        "length_cm": 77
+      }
+    }
+  },
+  {
     "id": "wt",
     "name": "Casual Cotton White T-Shirt",
     "category": "tshirt",

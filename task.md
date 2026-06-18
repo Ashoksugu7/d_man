@@ -52,7 +52,7 @@
 ## Phase 3 — HD Diffusion Try-On (Weeks 9–13)
 
 - [ ] Set up GPU inference server (NVIDIA ≥8GB VRAM)  <!-- needs a GPU host -->
-- [~] Integrate IDM-VTON or CatVTON model  <!-- pluggable IDMVTONEngine stub + integration guide in inference.py; real model needs GPU -->
+- [x] Integrate IDM-VTON or CatVTON model  <!-- ReplicateEngine: hosted IDM-VTON, works on any machine (HD_ENGINE=replicate + token); local GPU engine still a scaffold -->
 - [ ] Integrate DensePose body mapping pipeline  <!-- documented in IDMVTONEngine guide -->
 - [ ] Integrate SCHP for full human parsing (torso/legs isolation)  <!-- documented in IDMVTONEngine guide -->
 - [x] Build async job queue with Celery + Redis

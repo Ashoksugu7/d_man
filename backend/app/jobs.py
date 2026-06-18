@@ -39,6 +39,7 @@ celery_app.conf.update(
     task_always_eager=EAGER,
     task_eager_propagates=True,
     task_store_eager_result=True,
+    broker_connection_retry_on_startup=True,  # silence Celery 6.0 deprecation
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],

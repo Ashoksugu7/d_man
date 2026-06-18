@@ -37,6 +37,7 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
   const [debug, setDebug] = useState(false);
   const [hdProgress, setHdProgress] = useState<number | null>(null);
   const [hdMessage, setHdMessage] = useState("");
+  const [hdEngine, setHdEngine] = useState<string | null>(null);
   const canRun = !!photo && !!selectedGarment && !loading && hdProgress === null;
   const canMeasure = !!photo && !!heightCm && heightCm > 0 && !measuring;
 
@@ -83,6 +84,7 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
         if (typeof s.progress === "number") setHdProgress(s.progress);
         if (s.message) setHdMessage(s.message);
         if (s.status === "success" && s.result_url && s.result_id) {
+          setHdEngine(s.engine ?? null);
           setResult({
             result_url: s.result_url,
             result_id: s.result_id,
@@ -152,6 +154,14 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
             {hdMessage} ({hdProgress}%)
           </p>
         </div>
+      )}
+
+      {hdEngine && hdProgress === null && (
+        <p className="mb-3 text-[11px] text-neutral-500">
+          HD rendered with engine: <span className="font-medium">{hdEngine}</span>
+          {hdEngine === "local" &&
+            " — style-conditioning only; use catvton/replicate + a real garment photo for true try-on."}
+        </p>
       )}
 
       <label className="mb-3 flex items-center gap-2 text-xs text-neutral-500">

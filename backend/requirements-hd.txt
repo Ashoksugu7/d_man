@@ -1,0 +1,18 @@
+# Optional deps for real HD (diffusion) try-on engines.
+# Base app does NOT need these — only install when using a real HD_ENGINE.
+
+# --- Hosted engine (HD_ENGINE=replicate) — works on any machine, incl. Mac ---
+replicate>=0.32.0
+requests>=2.31.0
+
+# --- Local engine (HD_ENGINE=local) — diffusers + IP-Adapter inpainting.
+#     Runs on Apple Silicon (MPS), CUDA, or CPU. On Mac the default pip torch
+#     wheel already supports MPS — no special build needed.
+torch>=2.2
+torchvision>=0.17
+diffusers>=0.27
+transformers>=4.40
+accelerate>=0.30
+safetensors>=0.4
+# No detectron2 / DensePose / SCHP needed — the mask is built from MediaPipe
+# (app/preprocess.py), which keeps this installable on macOS.
