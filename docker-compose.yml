@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   backend:
     build: ./backend
     ports:
@@ -6,9 +11,34 @@ services:
     volumes:
       - ./assets:/assets:ro
       - backend_results:/app/storage/results
+      - backend_uploads:/app/storage/uploads
     environment:
       - ASSETS_DIR=/assets
       - RESULTS_DIR=/app/storage/results
+      - UPLOADS_DIR=/app/storage/uploads
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  worker:
+    build: ./backend
+    command: celery -A app.jobs.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./assets:/assets:ro
+      - backend_results:/app/storage/results
+      - backend_uploads:/app/storage/uploads
+    environment:
+      - ASSETS_DIR=/assets
+      - RESULTS_DIR=/app/storage/results
+      - UPLOADS_DIR=/app/storage/uploads
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # GPU diffusion engine: set HD_ENGINE=idm_vton on a CUDA host (and give
+      # this service GPU access) once the model is integrated.
+      - HD_ENGINE=stub
+    depends_on:
+      - redis
 
   frontend:
     build: ./frontend
@@ -21,3 +51,4 @@ services:
 
 volumes:
   backend_results:
+  backend_uploads:

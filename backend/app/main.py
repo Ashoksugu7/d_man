@@ -18,6 +18,7 @@ from PIL import Image
 
 from .pose import estimate_body_keypoints, mediapipe_available
 from .warp import warp_and_composite, draw_debug
+from .measure import estimate_measurements, recommend_size
 
 # ---------------------------------------------------------------------------
 # Paths & config
@@ -27,6 +28,8 @@ REPO_DIR = BASE_DIR.parent                                  # repo root
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", REPO_DIR / "assets"))
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", BASE_DIR / "storage" / "results"))
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", BASE_DIR / "storage" / "uploads"))
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Virtual Try-On API", version="0.1.0")
 
@@ -47,6 +50,19 @@ def _load_catalog():
     if not path.exists():
         return []
     return json.loads(path.read_text())
+
+
+async def _decode_photo(photo: UploadFile) -> np.ndarray:
+    """Read an uploaded image into an RGB numpy array (raises HTTP 400)."""
+    raw = await photo.read()
+    try:
+        # PIL decodes png / jpg / webp transparently (libwebp bundled).
+        pil = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        raise HTTPException(
+            400, "Could not read uploaded image (supported: PNG, JPEG, WebP)"
+        )
+    return np.array(pil)
 
 
 def _load_garment_keypoints(
@@ -99,16 +115,7 @@ async def tryon_image(
     if out_fmt not in ("png", "webp"):
         raise HTTPException(400, "output_format must be 'png' or 'webp'")
 
-    raw = await photo.read()
-    try:
-        # PIL decodes png / jpg / webp transparently (libwebp bundled).
-        pil = Image.open(io.BytesIO(raw)).convert("RGB")
-    except Exception:
-        raise HTTPException(
-            400, "Could not read uploaded image (supported: PNG, JPEG, WebP)"
-        )
-
-    user_rgb = np.array(pil)
+    user_rgb = await _decode_photo(photo)
     user_bgr = cv2.cvtColor(user_rgb, cv2.COLOR_RGB2BGR)
 
     body_kp = estimate_body_keypoints(user_rgb)
@@ -147,6 +154,116 @@ async def tryon_image(
         "pose_method": "mediapipe" if mediapipe_available() else "fallback_heuristic",
         "keypoints": {k: list(v) for k, v in body_kp.items()},
     })
+
+
+@app.post("/api/measure")
+async def measure(
+    photo: UploadFile = File(...),
+    height_cm: float = Form(...),
+):
+    """Estimate body measurements from a full-body photo and recommend a size
+    for every garment in the catalog.
+
+    Returns 422 if no person is detected. If a person is found but the full
+    body isn't in frame (missing ankles/nose), measurements come back null with
+    a clear message and recommendations are omitted.
+    """
+    if height_cm <= 0 or height_cm > 260:
+        raise HTTPException(400, "height_cm must be between 1 and 260")
+
+    user_rgb = await _decode_photo(photo)
+
+    body_kp = estimate_body_keypoints(user_rgb)
+    if body_kp is None:
+        raise HTTPException(422, "No person detected in the photo")
+
+    measurements = estimate_measurements(body_kp, height_cm)
+
+    if measurements is None:
+        return JSONResponse({
+            "ok": False,
+            "measurements": None,
+            "recommendations": {},
+            "pose_method": "mediapipe" if mediapipe_available() else "fallback_heuristic",
+            "message": (
+                "Couldn't take measurements — make sure your whole body "
+                "(head to ankles) is visible in the photo."
+            ),
+        })
+
+    catalog = _load_catalog()
+    recommendations = {}
+    for g in catalog:
+        rec = recommend_size(
+            measurements, g.get("size_chart", {}), g.get("category", "shirt")
+        )
+        if rec is not None:
+            recommendations[g["id"]] = rec
+
+    return JSONResponse({
+        "ok": True,
+        "measurements": measurements,
+        "recommendations": recommendations,
+        "pose_method": "mediapipe" if mediapipe_available() else "fallback_heuristic",
+        "note": (
+            "Measurements are approximate, derived from a single 2D photo and "
+            "your stated height. Use as a guide, not exact sizing."
+        ),
+    })
+
+
+# ---------------------------------------------------------------------------
+# HD (async, diffusion-ready) try-on — Phase 3
+# ---------------------------------------------------------------------------
+@app.post("/api/tryon/hd")
+async def tryon_hd(
+    garment_id: str = Form(...),
+    photo: UploadFile = File(...),
+    output_format: str = Form("png"),
+):
+    """Enqueue an HD try-on job and return its id immediately.
+
+    The heavy work runs in a Celery worker (see app/jobs.py); poll
+    GET /api/tryon/hd/{job_id} for status, progress, and the result URL.
+    """
+    catalog = _load_catalog()
+    if not any(g["id"] == garment_id for g in catalog):
+        raise HTTPException(404, f"Unknown garment_id: {garment_id}")
+
+    raw = await photo.read()
+    try:
+        Image.open(io.BytesIO(raw)).verify()
+    except Exception:
+        raise HTTPException(400, "Could not read uploaded image")
+
+    in_id = uuid.uuid4().hex[:12]
+    in_path = UPLOADS_DIR / f"{in_id}"
+    in_path.write_bytes(raw)
+
+    from .jobs import run_hd_tryon
+    async_result = run_hd_tryon.delay(garment_id, str(in_path), output_format)
+    return JSONResponse({"job_id": async_result.id, "status": "queued"})
+
+
+@app.get("/api/tryon/hd/{job_id}")
+def tryon_hd_status(job_id: str):
+    """Poll an HD job: returns status, progress%, and the result on success."""
+    from .jobs import celery_app
+    res = celery_app.AsyncResult(job_id)
+    state = res.state  # PENDING | PROGRESS | SUCCESS | FAILURE | STARTED
+
+    payload: dict = {"job_id": job_id, "status": state.lower()}
+    if state == "PROGRESS" and isinstance(res.info, dict):
+        payload["progress"] = res.info.get("progress", 0)
+        payload["message"] = res.info.get("message", "")
+    elif state == "SUCCESS":
+        payload["progress"] = 100
+        payload.update(res.result or {})
+    elif state == "FAILURE":
+        payload["error"] = str(res.info)
+    elif state == "PENDING":
+        payload["progress"] = 0
+    return JSONResponse(payload)
 
 
 @app.get("/api/result/{result_id}")

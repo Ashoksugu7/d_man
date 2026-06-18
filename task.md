@@ -12,7 +12,7 @@
 - [x] Set up Docker + docker-compose (frontend + backend)
 - [x] Configure local file storage for garment and result images (local disk)
 - [x] Store garment metadata in a local JSON file (no DB for now)
-- [ ] Store try-on results in browser localStorage
+- [x] Store try-on results in browser localStorage  <!-- result gallery, lib/gallery.ts -->
 - [x] Set up CI/CD pipeline (GitHub Actions)
 
 ### Frontend
@@ -51,28 +51,36 @@
 
 ## Phase 3 — HD Diffusion Try-On (Weeks 9–13)
 
-- [ ] Set up GPU inference server (NVIDIA ≥8GB VRAM)
-- [ ] Integrate IDM-VTON or CatVTON model
-- [ ] Integrate DensePose body mapping pipeline
-- [ ] Integrate SCHP for full human parsing (torso/legs isolation)
-- [ ] Build async job queue with Celery + Redis
-- [ ] Create `POST /api/tryon/hd` endpoint (returns job ID)
-- [ ] Create `GET /api/tryon/hd/{job_id}` polling endpoint
-- [ ] Build job status UI (loading state + progress indicator)
-- [ ] Build try-on result gallery (user history)
-- [ ] Target: <15 seconds inference time per image
-- [ ] Export models to ONNX for speed optimization
+- [ ] Set up GPU inference server (NVIDIA ≥8GB VRAM)  <!-- needs a GPU host -->
+- [~] Integrate IDM-VTON or CatVTON model  <!-- pluggable IDMVTONEngine stub + integration guide in inference.py; real model needs GPU -->
+- [ ] Integrate DensePose body mapping pipeline  <!-- documented in IDMVTONEngine guide -->
+- [ ] Integrate SCHP for full human parsing (torso/legs isolation)  <!-- documented in IDMVTONEngine guide -->
+- [x] Build async job queue with Celery + Redis
+- [x] Create `POST /api/tryon/hd` endpoint (returns job ID)
+- [x] Create `GET /api/tryon/hd/{job_id}` polling endpoint
+- [x] Build job status UI (loading state + progress indicator)
+- [x] Build try-on result gallery (user history)  <!-- localStorage; also covers Phase 1 localStorage item -->
+- [ ] Target: <15 seconds inference time per image  <!-- depends on real model -->
+- [ ] Export models to ONNX for speed optimization  <!-- depends on real model -->
+
+<!-- Phase 3 async architecture (queue, endpoints, job UI, gallery) done with a
+     CPU StubEngine so it runs/verifies without a GPU. Real diffusion model
+     (IDM-VTON + DensePose + SCHP), <15s target, and ONNX are GPU-only and
+     remain open. See PHASE3_NOTES.md. Uncommitted for review. -->
 
 ---
 
 ## Phase 4 — Body Size Estimation (Weeks 14–16)
 
-- [ ] Estimate shoulder width from pose landmarks (pixel ratio)
-- [ ] Estimate torso length, waist proxy, hip proxy
-- [ ] Add height input field (for calibration)
-- [ ] Build size recommendation logic (compare user measurements to garment size chart)
-- [ ] Show fit badge on garment cards: `Fits Well` / `Too Tight` / `Too Loose`
-- [ ] Update garment DB schema with size chart per item
+- [x] Estimate shoulder width from pose landmarks (pixel ratio)
+- [x] Estimate torso length, waist proxy, hip proxy
+- [x] Add height input field (for calibration)
+- [x] Build size recommendation logic (compare user measurements to garment size chart)
+- [x] Show fit badge on garment cards: `Fits Well` / `Too Tight` / `Too Loose`
+- [x] Update garment DB schema with size chart per item  <!-- size_chart already in catalog.json -->
+
+<!-- Phase 4 implemented by scheduled task on 2026-06-18. See PHASE4_NOTES.md.
+     Approximate (single photo + height calibration). Uncommitted for review. -->
 
 ---
 

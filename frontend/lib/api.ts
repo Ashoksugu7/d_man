@@ -1,4 +1,4 @@
-import type { Garment, TryOnResult } from "./store";
+import type { Garment, TryOnResult, MeasureResult } from "./store";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -26,6 +26,59 @@ export async function requestTryOn(
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail || "Try-on failed");
   }
+  return res.json();
+}
+
+export async function requestMeasurements(
+  photo: File,
+  heightCm: number
+): Promise<MeasureResult> {
+  const form = new FormData();
+  form.append("photo", photo);
+  form.append("height_cm", String(heightCm));
+  const res = await fetch(`${API_BASE}/api/measure`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail || "Measurement failed");
+  }
+  return res.json();
+}
+
+// --- HD (async diffusion) try-on -------------------------------------------
+export type HdJobStatus = {
+  job_id: string;
+  status: string; // queued | pending | progress | started | success | failure
+  progress?: number;
+  message?: string;
+  result_url?: string;
+  result_id?: string;
+  engine?: string;
+  error?: string;
+};
+
+export async function submitHdJob(
+  garmentId: string,
+  photo: File,
+  outputFormat = "png"
+): Promise<{ job_id: string }> {
+  const form = new FormData();
+  form.append("garment_id", garmentId);
+  form.append("photo", photo);
+  form.append("output_format", outputFormat);
+  const res = await fetch(`${API_BASE}/api/tryon/hd`, { method: "POST", body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail || "Failed to submit HD job");
+  }
+  return res.json();
+}
+
+export async function pollHdJob(jobId: string): Promise<HdJobStatus> {
+  const res = await fetch(`${API_BASE}/api/tryon/hd/${jobId}`);
+  if (!res.ok) throw new Error("Failed to poll HD job");
   return res.json();
 }
 

@@ -73,6 +73,9 @@ def estimate_body_keypoints(image_rgb: np.ndarray) -> Optional[Dict[str, Tuple[f
         "right_hip": pts["right_hip"],
         "neck": neck,
     }
+    # 'nose' (head reference) is used by the Phase 4 height calibration.
+    if "nose" in pts:
+        out["nose"] = pts["nose"]
     for k in ("left_knee", "right_knee", "left_ankle", "right_ankle"):
         if k in pts:
             out[k] = pts[k]

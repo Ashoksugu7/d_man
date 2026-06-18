@@ -7,10 +7,12 @@ import PhotoUpload from "@/components/PhotoUpload";
 import GarmentGrid from "@/components/GarmentGrid";
 import ResultView from "@/components/ResultView";
 import LivePreview from "@/components/LivePreview";
+import Gallery from "@/components/Gallery";
 
 export default function Home() {
   const { setGarments } = useStore();
   const [tab, setTab] = useState<"image" | "live">("image");
+  const [galleryKey, setGalleryKey] = useState(0);
 
   useEffect(() => {
     fetchGarments()
@@ -40,11 +42,14 @@ export default function Home() {
       </div>
 
       {tab === "image" ? (
-        <div className="grid gap-6 md:grid-cols-3">
-          <PhotoUpload />
-          <GarmentGrid />
-          <ResultView />
-        </div>
+        <>
+          <div className="grid gap-6 md:grid-cols-3">
+            <PhotoUpload />
+            <GarmentGrid />
+            <ResultView onGalleryUpdate={() => setGalleryKey((k) => k + 1)} />
+          </div>
+          <Gallery refreshKey={galleryKey} />
+        </>
       ) : (
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
