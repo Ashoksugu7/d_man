@@ -1,0 +1,44 @@
+{
+  "id": "saree_pink_pallu",
+  "category": "pallu",
+  "keypoints_px": {
+    "top_left": [
+      60,
+      50
+    ],
+    "top_right": [
+      240,
+      50
+    ],
+    "left_hem": [
+      180,
+      670
+    ],
+    "right_hem": [
+      360,
+      670
+    ]
+  },
+  "keypoints_norm": {
+    "top_left": [
+      0.1429,
+      0.0694
+    ],
+    "top_right": [
+      0.5714,
+      0.0694
+    ],
+    "left_hem": [
+      0.4286,
+      0.9306
+    ],
+    "right_hem": [
+      0.8571,
+      0.9306
+    ]
+  },
+  "canvas": [
+    420,
+    720
+  ]
+}

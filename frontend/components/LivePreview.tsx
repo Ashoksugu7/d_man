@@ -9,6 +9,9 @@ import {
   Pt,
   bodyTargets,
   pantTargets,
+  skirtTargets,
+  kindFor,
+  topHem,
   solveAffine3,
 } from "@/lib/liveFit";
 
@@ -26,7 +29,9 @@ const FALLBACK_ANCHORS: Anchors = {
   c: [0.5, 0.8857],
 };
 
-const isPant = (cat?: string) => (cat || "").toLowerCase() === "pant";
+// kindFor maps category -> top | pant | skirt | lehenga (lehenga live = skirt).
+// Saree is image-mode only (multi-region drape) — not supported in live.
+const isImageOnly = (cat?: string) => (cat || "").toLowerCase() === "saree";
 
 const MIN_VISIBILITY = 0.5; // skip overlay if shoulders aren't confidently seen
 const LOST_GRACE_MS = 500; // keep last garment briefly when pose flickers
@@ -63,29 +68,33 @@ export default function LivePreview() {
     img.onerror = () => setGarmentError(true);
 
     anchorsRef.current = FALLBACK_ANCHORS;
-    const pant = isPant(selectedGarment.category);
+    const kind = kindFor(selectedGarment.category);
     fetch(assetUrl(selectedGarment.keypoints))
       .then((r) => r.json())
       .then((j) => {
         const n = j.keypoints_norm;
         if (!n) return;
-        anchorsRef.current = pant
-          ? {
-              a: n.right_waist,
-              b: n.left_waist,
-              c: [
-                (n.left_ankle[0] + n.right_ankle[0]) / 2,
-                (n.left_ankle[1] + n.right_ankle[1]) / 2,
-              ],
-            }
-          : {
-              a: n.right_shoulder,
-              b: n.left_shoulder,
-              c: [
-                (n.left_hem[0] + n.right_hem[0]) / 2,
-                (n.left_hem[1] + n.right_hem[1]) / 2,
-              ],
-            };
+        const hemMid = (l: string, r: string): [number, number] => [
+          (n[l][0] + n[r][0]) / 2,
+          (n[l][1] + n[r][1]) / 2,
+        ];
+        if (kind === "pant") {
+          anchorsRef.current = {
+            a: n.right_waist, b: n.left_waist,
+            c: hemMid("left_ankle", "right_ankle"),
+          };
+        } else if (kind === "skirt" || kind === "lehenga") {
+          // lehenga's primary keypoints file is the skirt (waist + hem)
+          anchorsRef.current = {
+            a: n.right_waist, b: n.left_waist,
+            c: hemMid("left_hem", "right_hem"),
+          };
+        } else {
+          anchorsRef.current = {
+            a: n.right_shoulder, b: n.left_shoulder,
+            c: hemMid("left_hem", "right_hem"),
+          };
+        }
       })
       .catch(() => {});
   }, [selectedGarment]);
@@ -199,36 +208,37 @@ export default function LivePreview() {
     lm: any[],
     g: HTMLImageElement
   ) {
+    if (isImageOnly(selectedGarment?.category)) return; // saree: image mode only
     const W = canvas.width;
     const H = canvas.height;
     const px = (i: number): Pt => ({ x: lm[i].x * W, y: lm[i].y * H });
-    const pant = isPant(selectedGarment?.category);
+    const kind = kindFor(selectedGarment?.category);
 
     // Smooth the landmarks this garment needs, then build the 3 body targets.
     let dst: [Pt, Pt, Pt];
-    if (pant) {
+    if (kind === "pant") {
       const raw = {
-        rightHip: px(LM.rightHip),
-        leftHip: px(LM.leftHip),
-        rightAnkle: px(LM.rightAnkle),
-        leftAnkle: px(LM.leftAnkle),
+        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
+        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
       };
-      const s = smootherRef.current.smooth(
-        raw as unknown as Record<string, Pt>
-      ) as unknown as typeof raw;
+      const s = smootherRef.current.smooth(raw as any) as typeof raw;
       const { rw, lw, ankle } = pantTargets(s);
       dst = [rw, lw, ankle];
+    } else if (kind === "skirt" || kind === "lehenga") {
+      const raw = {
+        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
+        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
+      };
+      const s = smootherRef.current.smooth(raw as any) as typeof raw;
+      const { rw, lw, hemMid } = skirtTargets(s);
+      dst = [rw, lw, hemMid];
     } else {
       const raw = {
-        rightShoulder: px(LM.rightShoulder),
-        leftShoulder: px(LM.leftShoulder),
-        rightHip: px(LM.rightHip),
-        leftHip: px(LM.leftHip),
+        rightShoulder: px(LM.rightShoulder), leftShoulder: px(LM.leftShoulder),
+        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
       };
-      const s = smootherRef.current.smooth(
-        raw as unknown as Record<string, Pt>
-      ) as unknown as typeof raw;
-      const { rs, ls, hemMid } = bodyTargets(s);
+      const s = smootherRef.current.smooth(raw as any) as typeof raw;
+      const { rs, ls, hemMid } = bodyTargets(s, topHem(selectedGarment?.category));
       dst = [rs, ls, hemMid];
     }
 
@@ -260,7 +270,8 @@ export default function LivePreview() {
   ) {
     const W = canvas.width;
     const H = canvas.height;
-    const pts = isPant(selectedGarment?.category)
+    const lower = kindFor(selectedGarment?.category) !== "top";
+    const pts = lower
       ? [LM.leftHip, LM.rightHip, LM.leftAnkle, LM.rightAnkle]
       : [LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip];
     ctx.fillStyle = "#22c55e";
@@ -315,9 +326,16 @@ export default function LivePreview() {
         {!active && (
           <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-neutral-400">
             {status ||
-              (selectedGarment
+              (isImageOnly(selectedGarment?.category)
+                ? "Saree is image-mode only — use the HD Image Try-On tab"
+                : selectedGarment
                 ? "Press Start camera for a real-time overlay"
                 : "Select a garment first")}
+          </div>
+        )}
+        {active && isImageOnly(selectedGarment?.category) && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+            Saree is image-mode only — switch to HD Image Try-On
           </div>
         )}
         {active && !poseOk && (

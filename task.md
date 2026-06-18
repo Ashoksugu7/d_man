@@ -87,30 +87,38 @@
 ## Phase 5 — Indian Attire (Weeks 17–22)
 
 ### Kurta
-- [ ] Reuse shirt pipeline for kurta (front-facing)
-- [ ] Add kurta keypoints (longer hem, side slits)
+- [x] Reuse shirt pipeline for kurta (front-facing)  <!-- top warp, hem_extend 2.35 -->
+- [x] Add kurta keypoints (longer hem)  <!-- side slits not modeled (affine) -->
 
 ### Salwar / Palazzo
-- [ ] Extend pants pipeline for salwar
-- [ ] Handle wide-leg / palazzo shape warping
+- [x] Extend pants pipeline for salwar  <!-- pant warp, salwar/palazzo params -->
+- [x] Handle wide-leg / palazzo shape warping  <!-- waist_widen/ankle_extend per category -->
 
 ### Lehenga
-- [ ] Two-piece warping: skirt + blouse separately
-- [ ] Skirt: hip-to-hem warp; blouse: torso warp
-- [ ] Handle flared skirt geometry
+- [x] Two-piece warping: skirt + blouse separately  <!-- warp_lehenga() -->
+- [x] Skirt: hip-to-hem warp; blouse: torso warp
+- [x] Handle flared skirt geometry  <!-- SkirtFitParams.hem_flare -->
 
 ### Dupatta
-- [ ] Drape overlay anchored at shoulders
-- [ ] Static drape position for image mode
-- [ ] Optional: toggle dupatta on/off in UI
+- [x] Drape overlay anchored at shoulders  <!-- top-style warp, translucent PNG alpha -->
+- [x] Static drape position for image mode
+- [ ] Optional: toggle dupatta on/off in UI  <!-- not added yet -->
+
+<!-- Phase 5 (kurta/salwar/dupatta/lehenga) done with placeholder assets +
+     category-aware affine warp (HD/image/live) + annotation schemes. Saree
+     deferred (HD-only, needs real parsing). See PHASE5_NOTES.md. Uncommitted. -->
 
 ### Saree (Image Mode Only)
-- [ ] Research saree-specific body parsing approach
-- [ ] Segment regions: blouse, drape front, pallu
-- [ ] Implement pallu warp (learned warp preferred over geometric TPS)
-- [ ] Collect / curate reference saree try-on dataset
-- [ ] Run HD try-on pipeline for saree (no live mode yet)
-- [ ] Validate output quality on diverse body types
+- [x] Research saree-specific body parsing approach  <!-- see PHASE5_NOTES saree section -->
+- [x] Segment regions: blouse, drape front, pallu  <!-- 3-piece warp_saree() -->
+- [~] Implement pallu warp  <!-- geometric affine done; learned warp = future -->
+- [ ] Collect / curate reference saree try-on dataset  <!-- needs real data -->
+- [x] Run HD try-on pipeline for saree (no live mode yet)  <!-- saree->dresses; image-only, live blocked -->
+- [ ] Validate output quality on diverse body types  <!-- needs real images + GPU -->
+
+<!-- Saree: 3-region geometric placeholder (blouse+drape+pallu), image-mode only
+     (live blocked), HD maps saree->"dresses". Learned warp + dataset + diverse
+     validation remain (GPU/data). See PHASE5_NOTES.md. Uncommitted. -->
 
 ---
 

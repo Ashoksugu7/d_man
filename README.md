@@ -81,4 +81,4 @@ matching keypoint JSON (collar / shoulders / hem / sleeves) and a `catalog.json`
 entry in the same format.
 
 cd /Users/sugumarm/Projects/virtual_try_on/d_man/backend
-/Users/sugumarm/Projects/virtual_try_on/d_man/.venv/bin/celery -A app.jobs.celery_app worker --loglevel=info
+./run_worker.sh

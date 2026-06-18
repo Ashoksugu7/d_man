@@ -59,8 +59,12 @@
     <label>Category</label>
     <select id="gcat">
       <option>shirt</option><option>tshirt</option><option>polo</option>
-      <option>kurta</option><option>pant</option><option>other</option>
+      <option>kurta</option><option>dupatta</option><option>blouse</option>
+      <option>pant</option><option>salwar</option><option>palazzo</option>
+      <option>skirt</option><option>pallu</option><option>other</option>
     </select>
+    <p class="hint">Saree = annotate 3 pieces separately: blouse (blouse), lower
+      drape (skirt), and pallu (pallu).</p>
 
     <ol class="kp" id="kplist"></ol>
 
@@ -73,6 +77,26 @@
 
     <label style="margin-top:14px;">Preview output</label>
     <pre id="out">{ }</pre>
+
+    <hr style="margin:16px 0; border:none; border-top:1px solid var(--line);" />
+    <h2 style="font-size:14px; margin:0 0 4px;">Multi-piece (lehenga / saree)</h2>
+    <p class="hint">Annotate each piece above (it auto-picks the right scheme),
+      give it an id, and <b>Capture</b> it into the role below. When all roles
+      are captured, build the combined catalog entry.</p>
+    <label>Type</label>
+    <select id="mptype">
+      <option value="">— single piece (off) —</option>
+      <option value="lehenga">lehenga (blouse + skirt)</option>
+      <option value="saree">saree (blouse + drape + pallu)</option>
+    </select>
+    <label>Combined garment id</label>
+    <input id="mpid" placeholder="lehenga_01 / saree_01" />
+    <ol class="kp" id="mproles"></ol>
+    <div class="row">
+      <button id="mpbuild" disabled>Build entry</button>
+      <button id="mpcopy" disabled>Copy entry</button>
+    </div>
+    <pre id="mpout" style="display:none;"></pre>
   </div>
 </div>
 
@@ -102,12 +126,47 @@ const KP_SETS = {
       right_ankle:"bottom of the RIGHT leg (ankle hem)",
     },
   },
+  dupatta: {
+    order: ["left_shoulder","right_shoulder","left_hem","right_hem"],
+    hints: {
+      left_shoulder:"LEFT shoulder anchor (image RIGHT side)",
+      right_shoulder:"RIGHT shoulder anchor (image LEFT side)",
+      left_hem:"bottom-left corner of the drape",
+      right_hem:"bottom-right corner of the drape",
+    },
+  },
+  skirt: {
+    order: ["left_waist","right_waist","left_hem","right_hem"],
+    hints: {
+      left_waist:"LEFT waistband corner (image RIGHT side)",
+      right_waist:"RIGHT waistband corner (image LEFT side)",
+      left_hem:"bottom-left hem corner (flared)",
+      right_hem:"bottom-right hem corner (flared)",
+    },
+  },
+  pallu: {
+    order: ["top_left","top_right","left_hem","right_hem"],
+    hints: {
+      top_left:"top-left corner of the sash (goes over the shoulder)",
+      top_right:"top-right corner of the sash",
+      left_hem:"bottom-left of the hanging end",
+      right_hem:"bottom-right of the hanging end",
+    },
+  },
 };
 
-// Which categories are pants vs tops.
-const PANT_CATS = new Set(["pant"]);
+// Category -> keypoint scheme.
+const PANT_CATS = new Set(["pant","salwar","palazzo","trouser","trousers"]);
+const SKIRT_CATS = new Set(["skirt"]);
+const DUPATTA_CATS = new Set(["dupatta"]);
+const PALLU_CATS = new Set(["pallu"]);
 function activeSet() {
-  return PANT_CATS.has($("gcat").value) ? KP_SETS.pant : KP_SETS.top;
+  const c = $("gcat").value;
+  if (PANT_CATS.has(c)) return KP_SETS.pant;
+  if (SKIRT_CATS.has(c)) return KP_SETS.skirt;
+  if (DUPATTA_CATS.has(c)) return KP_SETS.dupatta;
+  if (PALLU_CATS.has(c)) return KP_SETS.pallu;
+  return KP_SETS.top;   // shirt, tshirt, polo, kurta, blouse, ...
 }
 // ORDER / HINTS are getters over the active set so the rest of the code is
 // unchanged.
@@ -259,10 +318,93 @@ $("copy").onclick = () => navigator.clipboard.writeText($("out").textContent);
 $("gcat").addEventListener("change", refreshKeypointSet);
 window.addEventListener("resize", () => { if(img){ fitScale(); draw(); }});
 
+// ---- Multi-piece (lehenga / saree) -----------------------------------------
+const MULTI = {
+  lehenga: { roles: ["blouse", "skirt"], primary: "skirt" },
+  saree:   { roles: ["blouse", "drape", "pallu"], primary: "drape" },
+};
+// Which keypoint category each role should be annotated with.
+const ROLE_CAT = { blouse: "blouse", skirt: "skirt", drape: "skirt", pallu: "pallu" };
+let mpPieces = {};   // role -> { id, ext }
+
+function mpRender() {
+  const t = $("mptype").value;
+  const box = $("mproles");
+  if (!t) { box.innerHTML = ""; $("mpbuild").disabled = $("mpcopy").disabled = true; return; }
+  const roles = MULTI[t].roles;
+  box.innerHTML = roles.map(role => {
+    const got = mpPieces[role];
+    const status = got ? `✓ ${got.id}.${got.ext}` : `category: ${ROLE_CAT[role]}`;
+    return `<li class="${got ? "done" : ""}">
+      <span>${role}</span>
+      <span class="coord">${status}
+        <button data-use="${role}" style="margin-left:6px;">scheme</button>
+        <button data-cap="${role}" style="margin-left:4px;">capture</button>
+      </span></li>`;
+  }).join("");
+  const allGot = roles.every(r => mpPieces[r]);
+  $("mpbuild").disabled = $("mpcopy").disabled = !(allGot && $("mpid").value);
+  box.querySelectorAll("button[data-use]").forEach(b =>
+    b.onclick = () => { $("gcat").value = ROLE_CAT[b.dataset.use]; refreshKeypointSet(); });
+  box.querySelectorAll("button[data-cap]").forEach(b =>
+    b.onclick = () => mpCapture(b.dataset.cap));
+}
+
+function mpCapture(role) {
+  // Require: an image loaded, a garment id, and all points for the *current*
+  // scheme placed (so the per-piece JSON/PNG are ready to download).
+  if (!img) return alert("Load the piece image first.");
+  const id = $("gid").value.trim();
+  if (!id) return alert("Set the garment id for this piece first.");
+  if (!buildJSON()) return alert(`Place all points for the ${role} (scheme: ${ROLE_CAT[role]}).`);
+  mpPieces[role] = { id, ext: imgExt };
+  alert(`Captured ${role} = ${id}.${imgExt}.\nRemember to Download ${id}.json and save ${id}.${imgExt}.`);
+  mpRender();
+}
+
+function mpBuild() {
+  const t = $("mptype").value; if (!t) return null;
+  const { roles, primary } = MULTI[t];
+  if (!roles.every(r => mpPieces[r])) return null;
+  const id = $("mpid").value.trim() || `${t}_01`;
+  const P = mpPieces;
+  const entry = {
+    id, name: $("gname").value || id, category: t,
+    image: `garments/${P[primary].id}.${P[primary].ext}`,
+    keypoints: `garments/${P[primary].id}.json`,
+  };
+  if (P.blouse) {
+    entry.blouse_image = `garments/${P.blouse.id}.${P.blouse.ext}`;
+    entry.blouse_keypoints = `garments/${P.blouse.id}.json`;
+  }
+  if (P.pallu) {
+    entry.pallu_image = `garments/${P.pallu.id}.${P.pallu.ext}`;
+    entry.pallu_keypoints = `garments/${P.pallu.id}.json`;
+  }
+  if (t === "saree") entry.image_only = true;
+  entry.size_chart = t === "saree"
+    ? { S: { length_cm: 550 }, M: { length_cm: 550 } }
+    : { S: { waist_cm: 66 }, M: { waist_cm: 71 }, L: { waist_cm: 76 }, XL: { waist_cm: 81 } };
+  return entry;
+}
+
+$("mptype").addEventListener("change", () => { mpPieces = {}; mpRender(); });
+$("mpid").addEventListener("input", mpRender);
+$("mpbuild").onclick = () => {
+  const e = mpBuild(); if (!e) return;
+  $("mpout").style.display = "block";
+  $("mpout").textContent = JSON.stringify(e, null, 2) +
+    "\n\n// Save each piece's PNG + <id>.json, then merge this entry into catalog.json";
+};
+$("mpcopy").onclick = () => {
+  const e = mpBuild(); if (e) navigator.clipboard.writeText(JSON.stringify(e, null, 2));
+};
+
 // Initialise active set now that the DOM ($) is ready.
 ORDER = activeSet().order;
 HINTS = activeSet().hints;
 renderList();
+mpRender();
 </script>
 </body>
 </html>

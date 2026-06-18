@@ -248,5 +248,194 @@
         "inseam_cm": 81
       }
     }
+  },
+  {
+    "id": "kurta_cream",
+    "name": "Cream Cotton Kurta",
+    "category": "kurta",
+    "image": "garments/kurta_cream.png",
+    "keypoints": "garments/kurta_cream.json",
+    "size_chart": {
+      "S": {
+        "shoulder_cm": 42,
+        "length_cm": 100
+      },
+      "M": {
+        "shoulder_cm": 45,
+        "length_cm": 104
+      },
+      "L": {
+        "shoulder_cm": 48,
+        "length_cm": 108
+      },
+      "XL": {
+        "shoulder_cm": 51,
+        "length_cm": 112
+      }
+    }
+  },
+  {
+    "id": "kurta_maroon",
+    "name": "Maroon Festive Kurta",
+    "category": "kurta",
+    "image": "garments/kurta_maroon.png",
+    "keypoints": "garments/kurta_maroon.json",
+    "size_chart": {
+      "S": {
+        "shoulder_cm": 42,
+        "length_cm": 100
+      },
+      "M": {
+        "shoulder_cm": 45,
+        "length_cm": 104
+      },
+      "L": {
+        "shoulder_cm": 48,
+        "length_cm": 108
+      },
+      "XL": {
+        "shoulder_cm": 51,
+        "length_cm": 112
+      }
+    }
+  },
+  {
+    "id": "salwar_white",
+    "name": "White Salwar",
+    "category": "salwar",
+    "image": "garments/salwar_white.png",
+    "keypoints": "garments/salwar_white.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 76,
+        "inseam_cm": 74
+      },
+      "M": {
+        "waist_cm": 81,
+        "inseam_cm": 76
+      },
+      "L": {
+        "waist_cm": 86,
+        "inseam_cm": 78
+      },
+      "XL": {
+        "waist_cm": 91,
+        "inseam_cm": 80
+      }
+    }
+  },
+  {
+    "id": "salwar_navy",
+    "name": "Navy Palazzo",
+    "category": "salwar",
+    "image": "garments/salwar_navy.png",
+    "keypoints": "garments/salwar_navy.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 76,
+        "inseam_cm": 74
+      },
+      "M": {
+        "waist_cm": 81,
+        "inseam_cm": 76
+      },
+      "L": {
+        "waist_cm": 86,
+        "inseam_cm": 78
+      },
+      "XL": {
+        "waist_cm": 91,
+        "inseam_cm": 80
+      }
+    }
+  },
+  {
+    "id": "dupatta_red",
+    "name": "Red Dupatta",
+    "category": "dupatta",
+    "image": "garments/dupatta_red.png",
+    "keypoints": "garments/dupatta_red.json",
+    "size_chart": {
+      "M": {
+        "length_cm": 230,
+        "width_cm": 90
+      }
+    }
+  },
+  {
+    "id": "dupatta_gold",
+    "name": "Gold Dupatta",
+    "category": "dupatta",
+    "image": "garments/dupatta_gold.png",
+    "keypoints": "garments/dupatta_gold.json",
+    "size_chart": {
+      "M": {
+        "length_cm": 230,
+        "width_cm": 90
+      }
+    }
+  },
+  {
+    "id": "lehenga_rose",
+    "name": "Rose Lehenga",
+    "category": "lehenga",
+    "image": "garments/lehenga_rose_skirt.png",
+    "keypoints": "garments/lehenga_rose_skirt.json",
+    "blouse_image": "garments/lehenga_rose_blouse.png",
+    "blouse_keypoints": "garments/lehenga_rose_blouse.json",
+    "size_chart": {
+      "S": {
+        "waist_cm": 66
+      },
+      "M": {
+        "waist_cm": 71
+      },
+      "L": {
+        "waist_cm": 76
+      },
+      "XL": {
+        "waist_cm": 81
+      }
+    }
+  },
+  {
+    "id": "saree_teal",
+    "name": "Teal Silk Saree",
+    "category": "saree",
+    "image": "garments/saree_teal_drape.png",
+    "keypoints": "garments/saree_teal_drape.json",
+    "blouse_image": "garments/saree_teal_blouse.png",
+    "blouse_keypoints": "garments/saree_teal_blouse.json",
+    "pallu_image": "garments/saree_teal_pallu.png",
+    "pallu_keypoints": "garments/saree_teal_pallu.json",
+    "image_only": true,
+    "size_chart": {
+      "S": {
+        "length_cm": 550
+      },
+      "M": {
+        "length_cm": 550
+      }
+    }
+  },
+  {
+    "id": "saree_pink",
+    "name": "Pink Festive Saree",
+    "category": "saree",
+    "image": "garments/saree_pink_drape.png",
+    "keypoints": "garments/saree_pink_drape.json",
+    "blouse_image": "garments/saree_pink_blouse.png",
+    "blouse_keypoints": "garments/saree_pink_blouse.json",
+    "pallu_image": "garments/saree_pink_pallu.png",
+    "pallu_keypoints": "garments/saree_pink_pallu.json",
+    "image_only": true,
+    "size_chart": {
+      "S": {
+        "length_cm": 550
+      },
+      "M": {
+        "length_cm": 550
+      }
+    }
   }
 ]

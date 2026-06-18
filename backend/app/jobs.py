@@ -14,10 +14,7 @@ import os
 from pathlib import Path
 from typing import Dict, Tuple
 
-import cv2
-import numpy as np
 from celery import Celery
-from PIL import Image
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BASE_DIR.parent
@@ -71,6 +68,10 @@ def run_hd_tryon(self, garment_id: str, photo_path: str, output_format: str = "p
     """
     # Imports are inside the task so the worker only loads heavy deps when it
     # actually runs (and so EAGER mode in tests stays light).
+    import cv2
+    import numpy as np
+    from PIL import Image
+
     from .pose import estimate_body_keypoints
     from .inference import get_engine
 

@@ -18,6 +18,24 @@ export const PANT_FIT = {
   ankleExtend: 1.02,
 };
 
+// Skirt fit — mirror backend/app/warp.py SkirtFitParams.
+export const SKIRT_FIT = { waistWiden: 1.1, waistLift: 0.06, hemDrop: 0.85, hemFlare: 2.4 };
+
+// Per-category hem length for tops (kurta is long, dupatta drapes lower).
+// Mirrors backend _TOP_FIT hem_extend values.
+const TOP_HEM: Record<string, number> = { kurta: 2.35, dupatta: 1.75, blouse: 0.95 };
+
+export type Kind = "top" | "pant" | "skirt" | "lehenga";
+export function kindFor(category?: string): Kind {
+  const c = (category || "").toLowerCase();
+  if (["pant", "salwar", "palazzo", "trouser", "trousers"].includes(c)) return "pant";
+  if (c === "skirt") return "skirt";
+  if (c === "lehenga") return "lehenga";
+  return "top"; // shirt, tshirt, kurta, dupatta, blouse, ...
+}
+export const topHem = (category?: string) =>
+  TOP_HEM[(category || "").toLowerCase()] ?? FIT.hemExtend;
+
 // MediaPipe Pose landmark indices we use.
 export const LM = {
   leftShoulder: 11,
@@ -90,12 +108,10 @@ export function solveAffine3(src: [Pt, Pt, Pt], dst: [Pt, Pt, Pt]) {
  * Given smoothed body landmarks (pixel coords) build the 3 destination points
  * (right shoulder, left shoulder, hem midpoint) the garment maps onto.
  */
-export function bodyTargets(b: {
-  rightShoulder: Pt;
-  leftShoulder: Pt;
-  rightHip: Pt;
-  leftHip: Pt;
-}) {
+export function bodyTargets(
+  b: { rightShoulder: Pt; leftShoulder: Pt; rightHip: Pt; leftHip: Pt },
+  hemExtend: number = FIT.hemExtend
+) {
   const shMid = mid(b.rightShoulder, b.leftShoulder);
   const hipMid = mid(b.rightHip, b.leftHip);
   const torso = sub(hipMid, shMid);
@@ -103,8 +119,25 @@ export function bodyTargets(b: {
 
   const rs = sub(add(shMid, scale(sub(b.rightShoulder, shMid), FIT.shoulderWiden)), lift);
   const ls = sub(add(shMid, scale(sub(b.leftShoulder, shMid), FIT.shoulderWiden)), lift);
-  const hemMid = sub(add(shMid, scale(torso, FIT.hemExtend)), lift);
+  const hemMid = sub(add(shMid, scale(torso, hemExtend)), lift);
   return { rs, ls, hemMid };
+}
+
+/** Skirt destination points: waist (at hips) + flared hem midpoint. */
+export function skirtTargets(b: {
+  rightHip: Pt;
+  leftHip: Pt;
+  rightAnkle: Pt;
+  leftAnkle: Pt;
+}) {
+  const hipMid = mid(b.rightHip, b.leftHip);
+  const ankleMid = mid(b.rightAnkle, b.leftAnkle);
+  const down = sub(ankleMid, hipMid);
+  const lift = scale(down, SKIRT_FIT.waistLift);
+  const rw = sub(add(hipMid, scale(sub(b.rightHip, hipMid), SKIRT_FIT.waistWiden)), lift);
+  const lw = sub(add(hipMid, scale(sub(b.leftHip, hipMid), SKIRT_FIT.waistWiden)), lift);
+  const hemMid = add(hipMid, scale(down, SKIRT_FIT.hemDrop));
+  return { rw, lw, hemMid };
 }
 
 /**

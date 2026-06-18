@@ -1,0 +1,44 @@
+{
+  "id": "saree_pink_drape",
+  "category": "skirt",
+  "keypoints_px": {
+    "left_waist": [
+      220,
+      60
+    ],
+    "right_waist": [
+      420,
+      60
+    ],
+    "left_hem": [
+      90,
+      760
+    ],
+    "right_hem": [
+      550,
+      760
+    ]
+  },
+  "keypoints_norm": {
+    "left_waist": [
+      0.3438,
+      0.0732
+    ],
+    "right_waist": [
+      0.6562,
+      0.0732
+    ],
+    "left_hem": [
+      0.1406,
+      0.9268
+    ],
+    "right_hem": [
+      0.8594,
+      0.9268
+    ]
+  },
+  "canvas": [
+    640,
+    820
+  ]
+}

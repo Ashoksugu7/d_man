@@ -1,0 +1,52 @@
+{
+  "id": "salwar_navy",
+  "category": "salwar",
+  "keypoints_px": {
+    "left_waist": [
+      120,
+      80
+    ],
+    "right_waist": [
+      440,
+      80
+    ],
+    "crotch": [
+      280.0,
+      430
+    ],
+    "left_ankle": [
+      175,
+      770
+    ],
+    "right_ankle": [
+      385,
+      770
+    ]
+  },
+  "keypoints_norm": {
+    "left_waist": [
+      0.2143,
+      0.0976
+    ],
+    "right_waist": [
+      0.7857,
+      0.0976
+    ],
+    "crotch": [
+      0.5,
+      0.5244
+    ],
+    "left_ankle": [
+      0.3125,
+      0.939
+    ],
+    "right_ankle": [
+      0.6875,
+      0.939
+    ]
+  },
+  "canvas": [
+    560,
+    820
+  ]
+}

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from .pose import estimate_body_keypoints, mediapipe_available
-from .warp import warp_and_composite, draw_debug
+from .warp import warp_and_composite, warp_lehenga, warp_saree, draw_debug
 from .measure import estimate_measurements, recommend_size
 
 # ---------------------------------------------------------------------------
@@ -63,6 +63,26 @@ async def _decode_photo(photo: UploadFile) -> np.ndarray:
             400, "Could not read uploaded image (supported: PNG, JPEG, WebP)"
         )
     return np.array(pil)
+
+
+def _load_piece(image_rel: str, keypoints_rel: str):
+    """Load a garment piece -> (BGR+alpha numpy, keypoints in image pixels).
+
+    Works for any single piece (shirt, pant, skirt, blouse, ...). Used directly
+    and twice for the two-piece lehenga.
+    """
+    img = Image.open(ASSETS_DIR / image_rel).convert("RGBA")
+    w, h = img.size
+    arr = np.array(img)
+    rgba = np.dstack([cv2.cvtColor(arr[:, :, :3], cv2.COLOR_RGB2BGR), arr[:, :, 3]])
+
+    data = json.loads((ASSETS_DIR / keypoints_rel).read_text())
+    if "keypoints_norm" in data:
+        kp = {k: (v[0] * w, v[1] * h) for k, v in data["keypoints_norm"].items()}
+    else:
+        cw, ch = data.get("canvas", [w, h])
+        kp = {k: (v[0] * w / cw, v[1] * h / ch) for k, v in data["keypoints_px"].items()}
+    return rgba, kp
 
 
 def _load_garment_keypoints(
@@ -122,21 +142,30 @@ async def tryon_image(
     if body_kp is None:
         raise HTTPException(422, "No person detected in the photo")
 
-    garment_img = Image.open(ASSETS_DIR / garment["image"]).convert("RGBA")
-    g_w, g_h = garment_img.size
-    garment_rgba = np.array(garment_img)
-    # PIL gives RGBA; warp expects channels in BGRA-style only for the BGR
-    # slice. Convert RGB->BGR for the color channels, keep alpha.
-    garment_rgba = np.dstack([
-        cv2.cvtColor(garment_rgba[:, :, :3], cv2.COLOR_RGB2BGR),
-        garment_rgba[:, :, 3],
-    ])
-    garment_kp = _load_garment_keypoints(garment, g_w, g_h)
     category = garment.get("category", "shirt")
 
-    result_bgr = warp_and_composite(
-        user_bgr, garment_rgba, garment_kp, body_kp, category
-    )
+    if category == "lehenga":
+        # Two-piece: warp the flared skirt, then the blouse on top.
+        skirt_rgba, skirt_kp = _load_piece(garment["image"], garment["keypoints"])
+        blouse_rgba, blouse_kp = _load_piece(
+            garment["blouse_image"], garment["blouse_keypoints"]
+        )
+        result_bgr = warp_lehenga(user_bgr, blouse_rgba, blouse_kp,
+                                  skirt_rgba, skirt_kp, body_kp)
+    elif category == "saree":
+        # Three-region: lower drape + blouse + pallu over the left shoulder.
+        drape_rgba, drape_kp = _load_piece(garment["image"], garment["keypoints"])
+        blouse_rgba, blouse_kp = _load_piece(
+            garment["blouse_image"], garment["blouse_keypoints"])
+        pallu_rgba, pallu_kp = _load_piece(
+            garment["pallu_image"], garment["pallu_keypoints"])
+        result_bgr = warp_saree(user_bgr, blouse_rgba, blouse_kp,
+                                drape_rgba, drape_kp, pallu_rgba, pallu_kp, body_kp)
+    else:
+        garment_rgba, garment_kp = _load_piece(garment["image"], garment["keypoints"])
+        result_bgr = warp_and_composite(
+            user_bgr, garment_rgba, garment_kp, body_kp, category
+        )
     if debug:
         # Overlay detected landmarks + target quad so pose vs warp errors are
         # distinguishable.
