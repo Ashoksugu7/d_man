@@ -5,7 +5,8 @@ run today (CPU stub) and be upgraded to a real diffusion model (IDM-VTON /
 CatVTON) on a GPU box without touching the queue, endpoints, or UI.
 
 Select the engine with the HD_ENGINE env var:
-    HD_ENGINE=stub      -> StubEngine     (default; CPU; reuses the affine warp)
+    HD_ENGINE=catvton   -> CatVTONEngine  (default; local real VTON)
+    HD_ENGINE=stub      -> StubEngine     (CPU; reuses the affine warp)
     HD_ENGINE=replicate -> ReplicateEngine(hosted IDM-VTON; no local GPU needed;
                                            requires REPLICATE_API_TOKEN)
     HD_ENGINE=idm_vton  -> IDMVTONEngine  (local; requires NVIDIA/MPS + weights)
@@ -462,10 +463,10 @@ _engine_singleton: InferenceEngine | None = None
 
 
 def get_engine() -> InferenceEngine:
-    """Return the configured engine (cached). Falls back to stub if unknown."""
+    """Return the configured engine (cached). Defaults HD renders to CatVTON."""
     global _engine_singleton
     if _engine_singleton is None:
-        key = os.getenv("HD_ENGINE", "stub").lower()
+        key = os.getenv("HD_ENGINE", "catvton").lower()
         cls = _ENGINES.get(key, StubEngine)
         _engine_singleton = cls()
     return _engine_singleton

@@ -41,6 +41,7 @@
   <div class="panel">
     <div class="row" style="margin-bottom:10px; align-items:center;">
       <input type="file" id="file" accept="image/png,image/webp,image/jpeg,image/*" style="flex:1;" />
+      <button id="guess">Guess points (G)</button>
       <button id="undo">Undo last (U)</button>
       <button id="reset">Reset points</button>
       <span class="pill" id="zoomlbl">100%</span>
@@ -48,7 +49,7 @@
     <div class="canvas-box">
       <canvas id="cv" width="400" height="500"></canvas>
     </div>
-    <p class="hint">Click order is shown on the right. The current target is highlighted. Press <b>U</b> to undo.</p>
+    <p class="hint">Click to place the next point (order on the right). <b>Drag</b> any placed dot to reposition it. Press <b>U</b> to undo, <b>G</b> to auto-guess.</p>
   </div>
 
   <div class="panel">
@@ -58,10 +59,11 @@
     <input id="gname" placeholder="Linen Casual Shirt" />
     <label>Category</label>
     <select id="gcat">
-      <option>shirt</option><option>tshirt</option><option>polo</option>
-      <option>kurta</option><option>dupatta</option><option>blouse</option>
-      <option>pant</option><option>salwar</option><option>palazzo</option>
-      <option>skirt</option><option>pallu</option><option>other</option>
+      <option>shirt</option><option>tshirt</option><option>fullsleeve</option>
+      <option>polo</option><option>kurta</option><option>dupatta</option>
+      <option>blouse</option><option>pant</option><option>salwar</option>
+      <option>palazzo</option><option>skirt</option><option>pallu</option>
+      <option>other</option>
     </select>
     <p class="hint">Saree = annotate 3 pieces separately: blouse (blouse), lower
       drape (skirt), and pallu (pallu).</p>
@@ -69,11 +71,15 @@
     <ol class="kp" id="kplist"></ol>
 
     <div class="row">
-      <button class="primary" id="dljson" disabled>Download &lt;id&gt;.json</button>
-      <button id="dlcat" disabled>Download catalog snippet</button>
-      <button id="copy" disabled>Copy JSON</button>
+      <button class="primary" id="dlimg" disabled>1 · Download image</button>
+      <button class="primary" id="dljson" disabled>2 · Download &lt;id&gt;.json</button>
+      <button id="dlcat" disabled>3 · Download catalog snippet</button>
     </div>
-    <p class="hint">Save the image as <code>assets/garments/&lt;id&gt;.&lt;ext&gt;</code> (png or webp, transparent background), the JSON as <code>assets/garments/&lt;id&gt;.json</code>, and merge the catalog snippet into <code>assets/catalog.json</code>. The snippet's <code>image</code> path matches the file you loaded.</p>
+    <div class="row" style="margin-top:6px;">
+      <button id="copyjson" disabled>Copy annotation JSON</button>
+      <button id="copycat" disabled>Copy catalog snippet</button>
+    </div>
+    <p class="hint" id="savehint">Save all three, then merge the catalog snippet into <code>assets/catalog.json</code>.</p>
 
     <label style="margin-top:14px;">Preview output</label>
     <pre id="out">{ }</pre>
@@ -115,6 +121,27 @@ const KP_SETS = {
       left_hem:"bottom-left hem corner",
       right_hem:"bottom-right hem corner",
     },
+    // fractions within the garment's alpha bounding box (x, y) for auto-guess
+    guess: { collar:[0.5,0.04], left_shoulder:[0.25,0.12], right_shoulder:[0.75,0.12],
+             left_sleeve:[0.04,0.34], right_sleeve:[0.96,0.34],
+             left_hem:[0.27,0.98], right_hem:[0.73,0.98] },
+  },
+  fullsleeve: {
+    // full / long-sleeve shirt: same points as a top, but the sleeve ends are
+    // the WRIST CUFFS (low + outer), not the upper-arm.
+    order: ["collar","left_shoulder","right_shoulder","left_sleeve","right_sleeve","left_hem","right_hem"],
+    hints: {
+      collar:"center of the collar / neckline",
+      left_shoulder:"wearer's LEFT shoulder seam (image RIGHT side)",
+      right_shoulder:"wearer's RIGHT shoulder seam (image LEFT side)",
+      left_sleeve:"LEFT cuff — end of the long sleeve (at the wrist)",
+      right_sleeve:"RIGHT cuff — end of the long sleeve (at the wrist)",
+      left_hem:"bottom-left hem corner",
+      right_hem:"bottom-right hem corner",
+    },
+    guess: { collar:[0.5,0.04], left_shoulder:[0.26,0.12], right_shoulder:[0.74,0.12],
+             left_sleeve:[0.05,0.66], right_sleeve:[0.95,0.66],
+             left_hem:[0.30,0.98], right_hem:[0.70,0.98] },
   },
   pant: {
     order: ["left_waist","right_waist","crotch","left_ankle","right_ankle"],
@@ -125,6 +152,8 @@ const KP_SETS = {
       left_ankle:"bottom of the LEFT leg (ankle hem)",
       right_ankle:"bottom of the RIGHT leg (ankle hem)",
     },
+    guess: { left_waist:[0.18,0.03], right_waist:[0.82,0.03], crotch:[0.5,0.52],
+             left_ankle:[0.30,0.98], right_ankle:[0.70,0.98] },
   },
   dupatta: {
     order: ["left_shoulder","right_shoulder","left_hem","right_hem"],
@@ -134,6 +163,8 @@ const KP_SETS = {
       left_hem:"bottom-left corner of the drape",
       right_hem:"bottom-right corner of the drape",
     },
+    guess: { left_shoulder:[0.08,0.06], right_shoulder:[0.92,0.06],
+             left_hem:[0.2,0.96], right_hem:[0.8,0.96] },
   },
   skirt: {
     order: ["left_waist","right_waist","left_hem","right_hem"],
@@ -143,6 +174,8 @@ const KP_SETS = {
       left_hem:"bottom-left hem corner (flared)",
       right_hem:"bottom-right hem corner (flared)",
     },
+    guess: { left_waist:[0.35,0.04], right_waist:[0.65,0.04],
+             left_hem:[0.04,0.98], right_hem:[0.96,0.98] },
   },
   pallu: {
     order: ["top_left","top_right","left_hem","right_hem"],
@@ -152,6 +185,8 @@ const KP_SETS = {
       left_hem:"bottom-left of the hanging end",
       right_hem:"bottom-right of the hanging end",
     },
+    guess: { top_left:[0.14,0.06], top_right:[0.57,0.06],
+             left_hem:[0.43,0.96], right_hem:[0.86,0.96] },
   },
 };
 
@@ -166,6 +201,7 @@ function activeSet() {
   if (SKIRT_CATS.has(c)) return KP_SETS.skirt;
   if (DUPATTA_CATS.has(c)) return KP_SETS.dupatta;
   if (PALLU_CATS.has(c)) return KP_SETS.pallu;
+  if (c === "fullsleeve") return KP_SETS.fullsleeve;
   return KP_SETS.top;   // shirt, tshirt, polo, kurta, blouse, ...
 }
 // ORDER / HINTS are getters over the active set so the rest of the code is
@@ -180,6 +216,7 @@ const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 let img = null, imgW = 0, imgH = 0, scale = 1;
 let points = {};   // name -> {x,y} in image pixel coords
 let imgExt = "png"; // real extension of the loaded file (png | webp | jpg ...)
+let imgFile = null; // the original uploaded File (so we can re-download it)
 
 const $ = id => document.getElementById(id);
 
@@ -238,14 +275,24 @@ function buildJSON() {
   };
 }
 
+function sizeChartFor(cat) {
+  if (PANT_CATS.has(cat))
+    return { S:{waist_cm:76,inseam_cm:76}, M:{waist_cm:81,inseam_cm:78},
+             L:{waist_cm:86,inseam_cm:80}, XL:{waist_cm:91,inseam_cm:81} };
+  if (SKIRT_CATS.has(cat))
+    return { S:{waist_cm:66}, M:{waist_cm:71}, L:{waist_cm:76}, XL:{waist_cm:81} };
+  if (DUPATTA_CATS.has(cat) || PALLU_CATS.has(cat))
+    return { M:{length_cm:230, width_cm:90} };
+  if (cat === "kurta")
+    return { S:{shoulder_cm:42,length_cm:100}, M:{shoulder_cm:45,length_cm:104},
+             L:{shoulder_cm:48,length_cm:108}, XL:{shoulder_cm:51,length_cm:112} };
+  return { S:{shoulder_cm:42,length_cm:68}, M:{shoulder_cm:45,length_cm:71},
+           L:{shoulder_cm:48,length_cm:74}, XL:{shoulder_cm:51,length_cm:77} };
+}
+
 function buildCatalog() {
   const id = $("gid").value || "garment_id";
-  const pant = PANT_CATS.has($("gcat").value);
-  const size_chart = pant
-    ? { S:{waist_cm:76,inseam_cm:76}, M:{waist_cm:81,inseam_cm:78},
-        L:{waist_cm:86,inseam_cm:80}, XL:{waist_cm:91,inseam_cm:81} }
-    : { S:{shoulder_cm:42,length_cm:68}, M:{shoulder_cm:45,length_cm:71},
-        L:{shoulder_cm:48,length_cm:74}, XL:{shoulder_cm:51,length_cm:77} };
+  const size_chart = sizeChartFor($("gcat").value);
   return {
     id,
     name: $("gname").value || id,
@@ -259,11 +306,19 @@ function buildCatalog() {
 function updateOutput() {
   const j = buildJSON();
   const complete = !!j;
-  $("dljson").disabled = $("dlcat").disabled = $("copy").disabled = !complete;
+  $("dljson").disabled = $("dlcat").disabled = $("copyjson").disabled =
+    $("copycat").disabled = !complete;
+  $("dlimg").disabled = !imgFile;
   $("out").textContent = JSON.stringify(
     j || { progress: `${Object.keys(points).length}/${ORDER.length} points` },
     null, 2
   );
+  // Show exactly where each file goes, with the real id/ext.
+  const id = $("gid").value || "garment_id";
+  $("savehint").innerHTML =
+    `Place files: <code>assets/garments/${id}.${imgExt}</code> (image) ` +
+    `· <code>assets/garments/${id}.json</code> (annotation) ` +
+    `· merge the catalog snippet into <code>assets/catalog.json</code>.`;
 }
 
 // Switch active keypoint set when the category changes between top and pant.
@@ -286,6 +341,7 @@ function download(name, obj) {
 
 $("file").addEventListener("change", e => {
   const f = e.target.files[0]; if (!f) return;
+  imgFile = f;
   const m = f.name.match(/\.([^.]+)$/);
   imgExt = (m ? m[1] : "png").toLowerCase();
   const im = new Image();
@@ -294,26 +350,110 @@ $("file").addEventListener("change", e => {
   im.src = URL.createObjectURL(f);
 });
 
-cv.addEventListener("click", e => {
-  if (!img) return;
-  const t = nextTarget(); if (!t) return;
+// Click to place the next point; click-and-drag an existing point to reposition.
+let dragName = null;
+function imgPos(e) {
   const r = cv.getBoundingClientRect();
-  points[t] = { x:(e.clientX-r.left)/scale, y:(e.clientY-r.top)/scale };
-  draw(); renderList();
+  return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
+}
+function hitPoint(p) {
+  const tol = 10 / scale;            // ~10 screen px
+  let best = null, bestD = tol;
+  for (const n of ORDER) {
+    const q = points[n]; if (!q) continue;
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d <= bestD) { bestD = d; best = n; }
+  }
+  return best;
+}
+cv.addEventListener("mousedown", e => {
+  if (!img) return;
+  const p = imgPos(e);
+  const hit = hitPoint(p);
+  if (hit) { dragName = hit; cv.style.cursor = "grabbing"; return; }
+  const t = nextTarget(); if (!t) return;
+  points[t] = p; draw(); renderList();
+});
+cv.addEventListener("mousemove", e => {
+  if (!img) return;
+  if (dragName) { points[dragName] = imgPos(e); draw(); renderList(); return; }
+  cv.style.cursor = hitPoint(imgPos(e)) ? "grab" : "crosshair";
+});
+window.addEventListener("mouseup", () => {
+  if (dragName) { dragName = null; cv.style.cursor = "crosshair"; }
 });
 
 document.addEventListener("keydown", e => {
   if (e.key==="u"||e.key==="U") undo();
+  if (e.key==="g"||e.key==="G") guessPoints();
 });
 function undo(){
   const done = ORDER.filter(n=>points[n]);
   if (done.length){ delete points[done[done.length-1]]; draw(); renderList(); }
 }
+
+// Auto-estimate keypoints from the garment's alpha bounding box, using the
+// active scheme's `guess` fractions. Gives a starting layout you then tweak.
+function alphaBBox() {
+  const c = document.createElement("canvas");
+  c.width = imgW; c.height = imgH;
+  const cx = c.getContext("2d");
+  cx.drawImage(img, 0, 0);
+  let x0 = imgW, y0 = imgH, x1 = 0, y1 = 0, found = false;
+  try {
+    const d = cx.getImageData(0, 0, imgW, imgH).data;
+    const step = Math.max(1, Math.floor(Math.min(imgW, imgH) / 400)); // subsample
+    for (let y = 0; y < imgH; y += step) {
+      for (let x = 0; x < imgW; x += step) {
+        if (d[(y * imgW + x) * 4 + 3] > 12) {
+          found = true;
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+  } catch (e) { /* tainted/jpg -> fall through */ }
+  if (!found) { x0 = 0; y0 = 0; x1 = imgW; y1 = imgH; }  // no alpha (e.g. jpg)
+  return { x0, y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+function guessPoints() {
+  if (!img) return;
+  const g = activeSet().guess;
+  if (!g) return alert("No auto-guess for this scheme.");
+  const bb = alphaBBox();
+  for (const name of ORDER) {
+    const f = g[name]; if (!f) continue;
+    points[name] = { x: bb.x0 + f[0] * bb.w, y: bb.y0 + f[1] * bb.h };
+  }
+  draw(); renderList();
+}
+$("guess").onclick = guessPoints;
 $("undo").onclick = undo;
 $("reset").onclick = () => { points={}; draw(); renderList(); };
+$("dlimg").onclick = () => {
+  if (!imgFile) return;
+  const id = $("gid").value || "garment_id";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(imgFile);
+  a.download = `${id}.${imgExt}`;            // re-save with the catalog filename
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 $("dljson").onclick = () => { const j=buildJSON(); if(j) download(`${j.id}.json`, j); };
-$("dlcat").onclick = () => download("catalog-entry.json", buildCatalog());
-$("copy").onclick = () => navigator.clipboard.writeText($("out").textContent);
+$("dlcat").onclick = () => {
+  const id = $("gid").value || "garment_id";
+  download(`${id}.catalog.json`, buildCatalog());
+};
+$("copyjson").onclick = () => copyText(JSON.stringify(buildJSON(), null, 2), "copyjson");
+$("copycat").onclick = () => copyText(JSON.stringify(buildCatalog(), null, 2), "copycat");
+function copyText(text, btnId) {
+  navigator.clipboard.writeText(text).then(() => {
+    const b = $(btnId), old = b.textContent;
+    b.textContent = "Copied ✓";
+    setTimeout(() => { b.textContent = old; }, 1200);
+  });
+}
 ["gid","gname","gcat"].forEach(id => $(id).addEventListener("input", updateOutput));
 $("gcat").addEventListener("change", refreshKeypointSet);
 window.addEventListener("resize", () => { if(img){ fitScale(); draw(); }});

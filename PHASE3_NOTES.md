@@ -59,10 +59,10 @@ Pipeline: `photo → DensePose + parsing → (+ garment) → IDM-VTON/CatVTON �
 
 | HD_ENGINE  | Where it runs        | Needs                       | Notes |
 |------------|----------------------|-----------------------------|-------|
-| `stub`     | CPU (default)        | nothing                     | Reuses the affine warp; for dev/testing the pipeline. |
+| `catvton`  | Local MPS/CUDA/CPU (default) | torch + diffusers + CatVTON repo | **Real VTON, Mac-runnable.** True garment transfer; uses our MediaPipe mask (no detectron2). Best local quality. |
 | `replicate`| Cloud (hosted)       | `REPLICATE_API_TOKEN`, `pip install replicate` | **Recommended for Macs / no GPU.** Real IDM-VTON output, paid per call. |
 | `local`    | Local MPS/CUDA/CPU   | torch + diffusers (+downloads) | **Runs on Apple Silicon.** diffusers SD1.5-inpaint + IP-Adapter; mask from MediaPipe (no detectron2). Moderate quality. |
-| `catvton`  | Local MPS/CUDA/CPU   | torch + diffusers + CatVTON repo | **Real VTON, Mac-runnable.** True garment transfer; uses our MediaPipe mask (no detectron2). Best local quality. |
+| `stub`     | CPU                  | nothing                     | Reuses the affine warp; for dev/testing the pipeline. |
 | `idm_vton` | Local GPU            | torch + weights + parsing   | Official-pipeline scaffold; CUDA-first, hard on Mac. |
 
 ### Use the hosted (Replicate) engine — easiest real HD, any machine

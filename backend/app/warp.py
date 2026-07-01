@@ -15,14 +15,98 @@ All factors are gathered in FitParams so they can be tuned per garment later.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Dict, Tuple
 import numpy as np
 import cv2
 
+# Phase 6 realism toggles (CPU, no GPU). Override per-call or via env.
+TRYON_OCCLUDE = os.getenv("TRYON_OCCLUDE", "1") in ("1", "true", "True")
+TRYON_LIGHTING = os.getenv("TRYON_LIGHTING", "0") in ("1", "true", "True")
+# Experimental TPS refinement for tops (bends sleeves toward the arms). Opt-in;
+# affine is the stable default.
+TRYON_TPS = os.getenv("TRYON_TPS", "0") in ("1", "true", "True")
+
 
 def _to_np(pt) -> np.ndarray:
     return np.array([pt[0], pt[1]], dtype=np.float32)
+
+
+def forearm_occlusion_mask(shape, body_kp: Dict[str, Tuple[float, float]]) -> np.ndarray:
+    """Mask of the forearms + hands (elbow->wrist + a hand blob), so they can be
+    kept IN FRONT of the garment (folded arms shouldn't be painted over)."""
+    h, w = shape[:2]
+    m = np.zeros((h, w), np.uint8)
+    th = max(10, w // 18)
+    for side in ("left", "right"):
+        el = body_kp.get(f"{side}_elbow")
+        wr = body_kp.get(f"{side}_wrist")
+        if el and wr:
+            cv2.line(m, (int(el[0]), int(el[1])), (int(wr[0]), int(wr[1])), 255, th)
+            cv2.circle(m, (int(wr[0]), int(wr[1])), int(th * 1.2), 255, -1)  # hand
+    if th > 2:
+        m = cv2.GaussianBlur(m, (0, 0), th * 0.25)
+    return m
+
+
+def _apply_M(M: np.ndarray, pt) -> Tuple[float, float]:
+    x, y = pt
+    return (M[0, 0] * x + M[0, 1] * y + M[0, 2],
+            M[1, 0] * x + M[1, 1] * y + M[1, 2])
+
+
+def tps_refine_top(warped_rgba: np.ndarray, M: np.ndarray,
+                   garment_kp: Dict[str, Tuple[float, float]],
+                   body_kp: Dict[str, Tuple[float, float]],
+                   p: FitParams) -> np.ndarray:
+    """TPS refinement (CPU) on the already-affine-warped top: bend the sleeves
+    toward the elbows and seat the collar at the neck. Needs elbows; returns the
+    input unchanged if the required points are missing or TPS is unavailable."""
+    need = ("collar", "left_shoulder", "right_shoulder", "left_sleeve",
+            "right_sleeve", "left_hem", "right_hem")
+    if not all(k in garment_kp for k in need):
+        return warped_rgba
+    if not all(k in body_kp for k in ("left_elbow", "right_elbow")):
+        return warped_rgba
+    try:
+        rs, ls, rh, lh = _body_quad(body_kp, p)
+        neck = (_to_np(body_kp["left_shoulder"]) + _to_np(body_kp["right_shoulder"])) / 2
+        # current positions of garment landmarks after the affine fit
+        cur = [_apply_M(M, garment_kp[k]) for k in
+               ("right_shoulder", "left_shoulder", "collar",
+                "right_sleeve", "left_sleeve", "right_hem", "left_hem")]
+        tgt = [tuple(rs), tuple(ls),
+               (float(neck[0]), float(neck[1])),
+               tuple(_to_np(body_kp["right_elbow"])),
+               tuple(_to_np(body_kp["left_elbow"])),
+               tuple(rh), tuple(lh)]
+        tps = cv2.createThinPlateSplineShapeTransformer()
+        src = np.array(cur, np.float32).reshape(1, -1, 2)
+        dst = np.array(tgt, np.float32).reshape(1, -1, 2)
+        matches = [cv2.DMatch(i, i, 0) for i in range(len(cur))]
+        tps.estimateTransformation(dst, src, matches)
+        return tps.warpImage(warped_rgba)
+    except Exception:
+        return warped_rgba  # never let TPS break a working render
+
+
+def match_lighting(result_bgr: np.ndarray, user_bgr: np.ndarray,
+                   garment_alpha: np.ndarray) -> np.ndarray:
+    """Scale the garment region's brightness toward the scene's level under it,
+    so a flat garment doesn't look pasted. Gentle, clamped."""
+    region = garment_alpha > 25
+    if int(region.sum()) < 50:
+        return result_bgr
+    g_orig = cv2.cvtColor(user_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    g_cur = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    cur_mean = float(g_cur[region].mean())
+    if cur_mean < 1:
+        return result_bgr
+    ratio = float(np.clip(g_orig[region].mean() / cur_mean, 0.7, 1.3))
+    out = result_bgr.astype(np.float32)
+    out[region] = np.clip(out[region] * ratio, 0, 255)
+    return out.astype(np.uint8)
 
 
 @dataclass
@@ -219,40 +303,75 @@ def compute_affine(garment_kp: Dict[str, Tuple[float, float]],
     return _lstsq_affine(src, dst)
 
 
+def _override(params, overrides: dict | None):
+    """Apply per-garment fit overrides (only known fields) onto a params dataclass."""
+    if overrides:
+        for k, v in overrides.items():
+            if hasattr(params, k):
+                try:
+                    setattr(params, k, float(v))
+                except (TypeError, ValueError):
+                    pass
+    return params
+
+
 def affine_for(category: str,
                garment_kp: Dict[str, Tuple[float, float]],
-               body_kp: Dict[str, Tuple[float, float]]) -> np.ndarray:
+               body_kp: Dict[str, Tuple[float, float]],
+               fit_overrides: dict | None = None) -> np.ndarray:
     """Pick the right warp for the garment category (top/pant/skirt)."""
     kind = category_kind(category)
     if kind == "pant":
-        return compute_affine_pant(garment_kp, body_kp, _pant_params(category))
+        return compute_affine_pant(garment_kp, body_kp,
+                                   _override(_pant_params(category), fit_overrides))
     if kind in ("skirt", "lehenga"):
-        # Single-piece call (e.g. HD engines) treats the lehenga as its skirt.
-        return compute_affine_skirt(garment_kp, body_kp)
+        return compute_affine_skirt(garment_kp, body_kp,
+                                    _override(SkirtFitParams(), fit_overrides))
     # top, plus attire that reuses the top warp (kurta, dupatta, blouse)
-    return compute_affine(garment_kp, body_kp, _top_params(category))
+    return compute_affine(garment_kp, body_kp,
+                          _override(_top_params(category), fit_overrides))
 
 
 def warp_and_composite(user_bgr: np.ndarray,
                        garment_rgba: np.ndarray,
                        garment_kp: Dict[str, Tuple[float, float]],
                        body_kp: Dict[str, Tuple[float, float]],
-                       category: str = "shirt") -> np.ndarray:
-    """Warp garment onto user photo and alpha-composite. Returns BGR image."""
+                       category: str = "shirt",
+                       occlude: bool | None = None,
+                       lighting: bool | None = None,
+                       tps: bool | None = None,
+                       fit_overrides: dict | None = None) -> np.ndarray:
+    """Warp garment onto user photo and alpha-composite. Returns BGR image.
+
+    occlude  : keep forearms/hands in front of the garment (default TRYON_OCCLUDE).
+    lighting : match garment brightness to the scene (default TRYON_LIGHTING).
+    tps      : TPS refinement for tops (default TRYON_TPS; affine otherwise).
+    fit_overrides : per-garment FitParams overrides (hem_extend, shoulder_widen…).
+    """
+    occlude = TRYON_OCCLUDE if occlude is None else occlude
+    lighting = TRYON_LIGHTING if lighting is None else lighting
+    tps = TRYON_TPS if tps is None else tps
     h, w = user_bgr.shape[:2]
-    M = affine_for(category, garment_kp, body_kp)
+    M = affine_for(category, garment_kp, body_kp, fit_overrides)
 
     warped = cv2.warpAffine(
         garment_rgba, M, (w, h),
         flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
         borderValue=(0, 0, 0, 0),
     )
+    if tps and category_kind(category) == "top":
+        warped = tps_refine_top(warped, M, garment_kp, body_kp, _top_params(category))
 
     alpha = (warped[:, :, 3:4].astype(np.float32)) / 255.0
+    if occlude:
+        amask = forearm_occlusion_mask((h, w), body_kp).astype(np.float32) / 255.0
+        alpha = alpha * (1.0 - amask[:, :, None])   # arms/hands show through
     fg = warped[:, :, :3].astype(np.float32)
     bg = user_bgr.astype(np.float32)
-    out = fg * alpha + bg * (1.0 - alpha)
-    return out.astype(np.uint8)
+    out = (fg * alpha + bg * (1.0 - alpha)).astype(np.uint8)
+    if lighting:
+        out = match_lighting(out, user_bgr, (alpha[:, :, 0] * 255).astype(np.uint8))
+    return out
 
 
 def warp_lehenga(user_bgr: np.ndarray,

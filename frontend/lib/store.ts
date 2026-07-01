@@ -14,6 +14,9 @@ export type Garment = {
   image: string;
   keypoints: string;
   size_chart: Record<string, SizeDims>;
+  thumbnail?: string;
+  image_only?: boolean;
+  fit_params?: Record<string, number>;
 };
 
 export type TryOnResult = {

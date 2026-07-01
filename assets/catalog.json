@@ -1,441 +1,103 @@
 [
   {
-    "id": "sample_real",
-    "name": "Sample Real Shirt",
-    "category": "shirt",
-    "image": "garments/sample_real.jpg",
-    "keypoints": "garments/sample_real.json",
-    "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
-      },
-      "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
-      },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
-      },
-      "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
-      }
-    }
-  },
-  {
-    "id": "wt",
-    "name": "Casual Cotton White T-Shirt",
+    "id": "yy",
+    "name": "casual",
     "category": "tshirt",
-    "image": "garments/wt.png",
-    "keypoints": "garments/wt.json",
+    "image": "garments/yy.png",
+    "keypoints": "garments/yy.json",
     "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
+      "L": {
+        "length_cm": 74,
+        "shoulder_cm": 48
       },
       "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
+        "length_cm": 71,
+        "shoulder_cm": 45
       },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
+      "S": {
+        "length_cm": 68,
+        "shoulder_cm": 42
       },
       "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
+        "length_cm": 77,
+        "shoulder_cm": 51
       }
     }
   },
   {
-    "id": "shirt_red",
-    "name": "Classic Red Tee",
-    "category": "shirt",
-    "image": "garments/shirt_red.png",
-    "keypoints": "garments/shirt_red.json",
+    "id": "pngwing.com",
+    "name": "pngwing.com",
+    "category": "fullsleeve",
+    "image": "garments/pngwing.com.png",
+    "keypoints": "garments/pngwing.com.json",
     "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
+      "L": {
+        "length_cm": 74,
+        "shoulder_cm": 48
       },
       "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
+        "length_cm": 71,
+        "shoulder_cm": 45
       },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
+      "S": {
+        "length_cm": 68,
+        "shoulder_cm": 42
       },
       "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
+        "length_cm": 77,
+        "shoulder_cm": 51
       }
     }
   },
   {
-    "id": "shirt_blue",
-    "name": "Navy Polo",
-    "category": "shirt",
-    "image": "garments/shirt_blue.png",
-    "keypoints": "garments/shirt_blue.json",
+    "id": "compressed_69c448eb9cc200015ef61be998c8f9cf",
+    "name": "compressed_69c448eb9cc200015ef61be998c8f9cf",
+    "category": "fullsleeve",
+    "image": "garments/compressed_69c448eb9cc200015ef61be998c8f9cf.webp",
+    "keypoints": "garments/compressed_69c448eb9cc200015ef61be998c8f9cf.json",
     "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
+      "L": {
+        "length_cm": 74,
+        "shoulder_cm": 48
       },
       "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
+        "length_cm": 71,
+        "shoulder_cm": 45
       },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
+      "S": {
+        "length_cm": 68,
+        "shoulder_cm": 42
       },
       "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
+        "length_cm": 77,
+        "shoulder_cm": 51
       }
     }
   },
   {
-    "id": "shirt_green",
-    "name": "Forest Henley",
-    "category": "shirt",
-    "image": "garments/shirt_green.png",
-    "keypoints": "garments/shirt_green.json",
+    "id": "back_full_hand",
+    "name": "back_full_hand",
+    "category": "fullsleeve",
+    "image": "garments/back_full_hand.png",
+    "keypoints": "garments/back_full_hand.json",
     "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
+      "L": {
+        "length_cm": 74,
+        "shoulder_cm": 48
       },
       "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
+        "length_cm": 71,
+        "shoulder_cm": 45
       },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
+      "S": {
+        "length_cm": 68,
+        "shoulder_cm": 42
       },
       "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
+        "length_cm": 77,
+        "shoulder_cm": 51
       }
-    }
-  },
-  {
-    "id": "shirt_black",
-    "name": "Black Crew",
-    "category": "shirt",
-    "image": "garments/shirt_black.png",
-    "keypoints": "garments/shirt_black.json",
-    "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
-      },
-      "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
-      },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
-      },
-      "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
-      }
-    }
-  },
-  {
-    "id": "shirt_white",
-    "name": "White Oxford",
-    "category": "shirt",
-    "image": "garments/shirt_white.png",
-    "keypoints": "garments/shirt_white.json",
-    "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 68
-      },
-      "M": {
-        "shoulder_cm": 45,
-        "length_cm": 71
-      },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 74
-      },
-      "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 77
-      }
-    }
-  },
-  {
-    "id": "pant_blue",
-    "name": "Slim Blue Jeans",
-    "category": "pant",
-    "image": "garments/pant_blue.png",
-    "keypoints": "garments/pant_blue.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 76,
-        "inseam_cm": 76
-      },
-      "M": {
-        "waist_cm": 81,
-        "inseam_cm": 78
-      },
-      "L": {
-        "waist_cm": 86,
-        "inseam_cm": 80
-      },
-      "XL": {
-        "waist_cm": 91,
-        "inseam_cm": 81
-      }
-    }
-  },
-  {
-    "id": "pant_khaki",
-    "name": "Khaki Chinos",
-    "category": "pant",
-    "image": "garments/pant_khaki.png",
-    "keypoints": "garments/pant_khaki.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 76,
-        "inseam_cm": 76
-      },
-      "M": {
-        "waist_cm": 81,
-        "inseam_cm": 78
-      },
-      "L": {
-        "waist_cm": 86,
-        "inseam_cm": 80
-      },
-      "XL": {
-        "waist_cm": 91,
-        "inseam_cm": 81
-      }
-    }
-  },
-  {
-    "id": "pant_black",
-    "name": "Black Trousers",
-    "category": "pant",
-    "image": "garments/pant_black.png",
-    "keypoints": "garments/pant_black.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 76,
-        "inseam_cm": 76
-      },
-      "M": {
-        "waist_cm": 81,
-        "inseam_cm": 78
-      },
-      "L": {
-        "waist_cm": 86,
-        "inseam_cm": 80
-      },
-      "XL": {
-        "waist_cm": 91,
-        "inseam_cm": 81
-      }
-    }
-  },
-  {
-    "id": "kurta_cream",
-    "name": "Cream Cotton Kurta",
-    "category": "kurta",
-    "image": "garments/kurta_cream.png",
-    "keypoints": "garments/kurta_cream.json",
-    "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 100
-      },
-      "M": {
-        "shoulder_cm": 45,
-        "length_cm": 104
-      },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 108
-      },
-      "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 112
-      }
-    }
-  },
-  {
-    "id": "kurta_maroon",
-    "name": "Maroon Festive Kurta",
-    "category": "kurta",
-    "image": "garments/kurta_maroon.png",
-    "keypoints": "garments/kurta_maroon.json",
-    "size_chart": {
-      "S": {
-        "shoulder_cm": 42,
-        "length_cm": 100
-      },
-      "M": {
-        "shoulder_cm": 45,
-        "length_cm": 104
-      },
-      "L": {
-        "shoulder_cm": 48,
-        "length_cm": 108
-      },
-      "XL": {
-        "shoulder_cm": 51,
-        "length_cm": 112
-      }
-    }
-  },
-  {
-    "id": "salwar_white",
-    "name": "White Salwar",
-    "category": "salwar",
-    "image": "garments/salwar_white.png",
-    "keypoints": "garments/salwar_white.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 76,
-        "inseam_cm": 74
-      },
-      "M": {
-        "waist_cm": 81,
-        "inseam_cm": 76
-      },
-      "L": {
-        "waist_cm": 86,
-        "inseam_cm": 78
-      },
-      "XL": {
-        "waist_cm": 91,
-        "inseam_cm": 80
-      }
-    }
-  },
-  {
-    "id": "salwar_navy",
-    "name": "Navy Palazzo",
-    "category": "salwar",
-    "image": "garments/salwar_navy.png",
-    "keypoints": "garments/salwar_navy.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 76,
-        "inseam_cm": 74
-      },
-      "M": {
-        "waist_cm": 81,
-        "inseam_cm": 76
-      },
-      "L": {
-        "waist_cm": 86,
-        "inseam_cm": 78
-      },
-      "XL": {
-        "waist_cm": 91,
-        "inseam_cm": 80
-      }
-    }
-  },
-  {
-    "id": "dupatta_red",
-    "name": "Red Dupatta",
-    "category": "dupatta",
-    "image": "garments/dupatta_red.png",
-    "keypoints": "garments/dupatta_red.json",
-    "size_chart": {
-      "M": {
-        "length_cm": 230,
-        "width_cm": 90
-      }
-    }
-  },
-  {
-    "id": "dupatta_gold",
-    "name": "Gold Dupatta",
-    "category": "dupatta",
-    "image": "garments/dupatta_gold.png",
-    "keypoints": "garments/dupatta_gold.json",
-    "size_chart": {
-      "M": {
-        "length_cm": 230,
-        "width_cm": 90
-      }
-    }
-  },
-  {
-    "id": "lehenga_rose",
-    "name": "Rose Lehenga",
-    "category": "lehenga",
-    "image": "garments/lehenga_rose_skirt.png",
-    "keypoints": "garments/lehenga_rose_skirt.json",
-    "blouse_image": "garments/lehenga_rose_blouse.png",
-    "blouse_keypoints": "garments/lehenga_rose_blouse.json",
-    "size_chart": {
-      "S": {
-        "waist_cm": 66
-      },
-      "M": {
-        "waist_cm": 71
-      },
-      "L": {
-        "waist_cm": 76
-      },
-      "XL": {
-        "waist_cm": 81
-      }
-    }
-  },
-  {
-    "id": "saree_teal",
-    "name": "Teal Silk Saree",
-    "category": "saree",
-    "image": "garments/saree_teal_drape.png",
-    "keypoints": "garments/saree_teal_drape.json",
-    "blouse_image": "garments/saree_teal_blouse.png",
-    "blouse_keypoints": "garments/saree_teal_blouse.json",
-    "pallu_image": "garments/saree_teal_pallu.png",
-    "pallu_keypoints": "garments/saree_teal_pallu.json",
-    "image_only": true,
-    "size_chart": {
-      "S": {
-        "length_cm": 550
-      },
-      "M": {
-        "length_cm": 550
-      }
-    }
-  },
-  {
-    "id": "saree_pink",
-    "name": "Pink Festive Saree",
-    "category": "saree",
-    "image": "garments/saree_pink_drape.png",
-    "keypoints": "garments/saree_pink_drape.json",
-    "blouse_image": "garments/saree_pink_blouse.png",
-    "blouse_keypoints": "garments/saree_pink_blouse.json",
-    "pallu_image": "garments/saree_pink_pallu.png",
-    "pallu_keypoints": "garments/saree_pink_pallu.json",
-    "image_only": true,
-    "size_chart": {
-      "S": {
-        "length_cm": 550
-      },
-      "M": {
-        "length_cm": 550
-      }
-    }
+    },
+    "thumbnail": "garments/thumbs/back_full_hand.webp"
   }
 ]

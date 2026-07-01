@@ -23,6 +23,10 @@ type Anchors = {
   b: [number, number]; // top-left anchor (left shoulder / left waist)
   c: [number, number]; // bottom anchor (hem mid / ankle mid)
 };
+type NormPoint = [number, number];
+type AnnotationPoint = { name: string; x: number; y: number }; // normalized 0..1
+type AffineMatrix = { a: number; b: number; c: number; d: number; e: number; f: number };
+
 const FALLBACK_ANCHORS: Anchors = {
   a: [0.3, 0.2143],
   b: [0.7, 0.2143],
@@ -42,6 +46,7 @@ export default function LivePreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const garmentImgRef = useRef<HTMLImageElement | null>(null);
   const anchorsRef = useRef<Anchors>(FALLBACK_ANCHORS);
+  const annotationRef = useRef<AnnotationPoint[]>([]);
   const rafRef = useRef<number | null>(null);
   const landmarkerRef = useRef<any>(null);
   const smootherRef = useRef(new EMASmoother(0.4));
@@ -50,9 +55,19 @@ export default function LivePreview() {
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState("");
   const [mirror, setMirror] = useState(true);
-  const [showLandmarks, setShowLandmarks] = useState(false);
   const [fps, setFps] = useState(0);
   const [poseOk, setPoseOk] = useState(false);
+  const [showDupatta, setShowDupatta] = useState(true);
+  // Debug overlays (refs because the render loop reads them every frame).
+  const [poseDebug, setPoseDebug] = useState(false);
+  const [annoDebug, setAnnoDebug] = useState(false);
+  const showDupattaRef = useRef(true);
+  const poseDebugRef = useRef(false);
+  const annoDebugRef = useRef(false);
+  useEffect(() => { showDupattaRef.current = showDupatta; }, [showDupatta]);
+  useEffect(() => { poseDebugRef.current = poseDebug; }, [poseDebug]);
+  useEffect(() => { annoDebugRef.current = annoDebug; }, [annoDebug]);
+  const isDupatta = (selectedGarment?.category || "").toLowerCase() === "dupatta";
   const [garmentError, setGarmentError] = useState(false);
 
   // Preload selected garment image + anchors
@@ -68,36 +83,96 @@ export default function LivePreview() {
     img.onerror = () => setGarmentError(true);
 
     anchorsRef.current = FALLBACK_ANCHORS;
+    annotationRef.current = [];
     const kind = kindFor(selectedGarment.category);
     fetch(assetUrl(selectedGarment.keypoints))
       .then((r) => r.json())
       .then((j) => {
-        const n = j.keypoints_norm;
-        if (!n) return;
-        const hemMid = (l: string, r: string): [number, number] => [
-          (n[l][0] + n[r][0]) / 2,
-          (n[l][1] + n[r][1]) / 2,
-        ];
+        const raw = j.keypoints_norm || {};
+        const n = Object.fromEntries(
+          Object.entries(raw).filter(([, p]) =>
+            Array.isArray(p) &&
+            p.length >= 2 &&
+            Number.isFinite(p[0]) &&
+            Number.isFinite(p[1])
+          )
+        ) as Record<string, NormPoint>;
+        annotationRef.current = collectAnnotationPoints(j);
+        const hemMid = (l: string, r: string): NormPoint | null => {
+          if (!n[l] || !n[r]) return null;
+          return [
+            (n[l][0] + n[r][0]) / 2,
+            (n[l][1] + n[r][1]) / 2,
+          ];
+        };
         if (kind === "pant") {
+          const ankle = hemMid("left_ankle", "right_ankle");
+          if (!n.right_waist || !n.left_waist || !ankle) return;
           anchorsRef.current = {
             a: n.right_waist, b: n.left_waist,
-            c: hemMid("left_ankle", "right_ankle"),
+            c: ankle,
           };
         } else if (kind === "skirt" || kind === "lehenga") {
           // lehenga's primary keypoints file is the skirt (waist + hem)
+          const hem = hemMid("left_hem", "right_hem");
+          if (!n.right_waist || !n.left_waist || !hem) return;
           anchorsRef.current = {
             a: n.right_waist, b: n.left_waist,
-            c: hemMid("left_hem", "right_hem"),
+            c: hem,
           };
         } else {
+          const hem = hemMid("left_hem", "right_hem");
+          if (!n.right_shoulder || !n.left_shoulder || !hem) return;
           anchorsRef.current = {
             a: n.right_shoulder, b: n.left_shoulder,
-            c: hemMid("left_hem", "right_hem"),
+            c: hem,
           };
         }
       })
       .catch(() => {});
   }, [selectedGarment]);
+
+  function collectAnnotationPoints(j: any): AnnotationPoint[] {
+    const seen = new Set<string>();
+    const out: AnnotationPoint[] = [];
+    const canvas = Array.isArray(j?.canvas) ? j.canvas : [1, 1];
+    const canvasW = Number(canvas[0]) || 1;
+    const canvasH = Number(canvas[1]) || 1;
+    const add = (name: string, x: number, y: number) => {
+      if (!name || seen.has(name) || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      seen.add(name);
+      out.push({ name, x, y });
+    };
+    const addMap = (
+      map: unknown,
+      scaleX: number,
+      scaleY: number,
+      prefix = ""
+    ) => {
+      if (!map || typeof map !== "object") return;
+      Object.entries(map as Record<string, unknown>).forEach(([name, p]) => {
+        if (Array.isArray(p) && p.length >= 2) {
+          add(`${prefix}${name}`, Number(p[0]) * scaleX, Number(p[1]) * scaleY);
+        }
+      });
+    };
+
+    addMap(j?.keypoints_norm, 1, 1);
+    addMap(j?.keypoints_px, 1 / canvasW, 1 / canvasH);
+    addMap(j?.points_norm, 1, 1);
+    addMap(j?.points_px, 1 / canvasW, 1 / canvasH);
+    addMap(j?.points, 1 / canvasW, 1 / canvasH);
+    if (j?.pieces && typeof j.pieces === "object") {
+      Object.entries(j.pieces as Record<string, any>).forEach(([piece, data]) => {
+        addMap(data?.keypoints_norm, 1, 1, `${piece}.`);
+        addMap(data?.keypoints_px, 1 / canvasW, 1 / canvasH, `${piece}.`);
+        addMap(data?.points_norm, 1, 1, `${piece}.`);
+        addMap(data?.points_px, 1 / canvasW, 1 / canvasH, `${piece}.`);
+        addMap(data?.points, 1 / canvasW, 1 / canvasH, `${piece}.`);
+      });
+    }
+    return out;
+  }
 
   async function start() {
     setStatus("Loading pose model…");
@@ -178,8 +253,9 @@ export default function LivePreview() {
           // Pose is detected regardless of whether the garment image is ready.
           lastSeenRef.current = performance.now();
           setPoseOk(true);
-          if (g) drawGarment(ctx, canvas, lm, g);
-          if (showLandmarks) drawLandmarks(ctx, canvas, lm);
+          const garmentMatrix = g ? drawGarment(ctx, canvas, lm, g) : null;
+          if (annoDebugRef.current) drawAnnoDebug(ctx, g, garmentMatrix);
+          if (poseDebugRef.current) drawPoseDebug(ctx, canvas, lm);
         } else {
           const lostFor = performance.now() - lastSeenRef.current;
           if (lostFor > LOST_GRACE_MS) {
@@ -202,58 +278,63 @@ export default function LivePreview() {
     render();
   }
 
+  // Shared: the 3 affine target points (where the garment's anchors land) for
+  // the current garment category, from smoothed landmarks.
+  function targetsFor(lm: any[], W: number, H: number): [Pt, Pt, Pt] {
+    const px = (i: number): Pt => ({ x: lm[i].x * W, y: lm[i].y * H });
+    const kind = kindFor(selectedGarment?.category);
+    if (kind === "pant") {
+      const s = smootherRef.current.smooth({
+        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
+        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
+      } as any) as any;
+      const { rw, lw, ankle } = pantTargets(s);
+      return [rw, lw, ankle];
+    }
+    if (kind === "skirt" || kind === "lehenga") {
+      const s = smootherRef.current.smooth({
+        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
+        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
+      } as any) as any;
+      const { rw, lw, hemMid } = skirtTargets(s);
+      return [rw, lw, hemMid];
+    }
+    const s = smootherRef.current.smooth({
+      rightShoulder: px(LM.rightShoulder), leftShoulder: px(LM.leftShoulder),
+      rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
+    } as any) as any;
+    const { rs, ls, hemMid } = bodyTargets(s, topHem(selectedGarment?.category));
+    return [rs, ls, hemMid];
+  }
+
+  function affineFor(
+    lm: any[],
+    canvas: HTMLCanvasElement,
+    g: HTMLImageElement
+  ): AffineMatrix | null {
+    const dst = targetsFor(lm, canvas.width, canvas.height);
+
+    // Garment source points in image pixels (a/b/c = top-right, top-left, bottom)
+    const a = anchorsRef.current;
+    const src: [Pt, Pt, Pt] = [
+      { x: a.a[0] * g.width, y: a.a[1] * g.height },
+      { x: a.b[0] * g.width, y: a.b[1] * g.height },
+      { x: a.c[0] * g.width, y: a.c[1] * g.height },
+    ];
+    return solveAffine3(src, dst);
+  }
+
   function drawGarment(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     lm: any[],
     g: HTMLImageElement
-  ) {
-    if (isImageOnly(selectedGarment?.category)) return; // saree: image mode only
-    const W = canvas.width;
-    const H = canvas.height;
-    const px = (i: number): Pt => ({ x: lm[i].x * W, y: lm[i].y * H });
-    const kind = kindFor(selectedGarment?.category);
-
-    // Smooth the landmarks this garment needs, then build the 3 body targets.
-    let dst: [Pt, Pt, Pt];
-    if (kind === "pant") {
-      const raw = {
-        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
-        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
-      };
-      const s = smootherRef.current.smooth(raw as any) as typeof raw;
-      const { rw, lw, ankle } = pantTargets(s);
-      dst = [rw, lw, ankle];
-    } else if (kind === "skirt" || kind === "lehenga") {
-      const raw = {
-        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
-        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
-      };
-      const s = smootherRef.current.smooth(raw as any) as typeof raw;
-      const { rw, lw, hemMid } = skirtTargets(s);
-      dst = [rw, lw, hemMid];
-    } else {
-      const raw = {
-        rightShoulder: px(LM.rightShoulder), leftShoulder: px(LM.leftShoulder),
-        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
-      };
-      const s = smootherRef.current.smooth(raw as any) as typeof raw;
-      const { rs, ls, hemMid } = bodyTargets(s, topHem(selectedGarment?.category));
-      dst = [rs, ls, hemMid];
-    }
-
-    // Garment source points in image pixels (a/b/c = top-right, top-left, bottom)
-    const a = anchorsRef.current;
-    const gw = g.width;
-    const gh = g.height;
-    const src: [Pt, Pt, Pt] = [
-      { x: a.a[0] * gw, y: a.a[1] * gh },
-      { x: a.b[0] * gw, y: a.b[1] * gh },
-      { x: a.c[0] * gw, y: a.c[1] * gh },
-    ];
-
-    const m = solveAffine3(src, dst);
-    if (!m) return;
+  ): AffineMatrix | null {
+    if (isImageOnly(selectedGarment?.category)) return null; // saree: image mode only
+    if ((selectedGarment?.category || "").toLowerCase() === "dupatta" &&
+        !showDupattaRef.current) return null; // dupatta toggled off
+    const m = affineFor(lm, canvas, g);
+    if (!m) return null;
 
     ctx.save();
     ctx.globalAlpha = 0.95;
@@ -261,25 +342,103 @@ export default function LivePreview() {
     ctx.drawImage(g, 0, 0);
     ctx.restore();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return m;
   }
 
-  function drawLandmarks(
+  // Annotation/fit debug: project every annotation.json keypoint through the
+  // same affine matrix used for the live garment, so the dots show where each
+  // annotated garment point landed on the body.
+  function drawAnnoDebug(
     ctx: CanvasRenderingContext2D,
-    canvas: HTMLCanvasElement,
-    lm: any[]
+    g: HTMLImageElement | null,
+    m: AffineMatrix | null
   ) {
-    const W = canvas.width;
-    const H = canvas.height;
-    const lower = kindFor(selectedGarment?.category) !== "top";
-    const pts = lower
-      ? [LM.leftHip, LM.rightHip, LM.leftAnkle, LM.rightAnkle]
-      : [LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip];
-    ctx.fillStyle = "#22c55e";
-    for (const i of pts) {
+    if (!g || !m) return;
+    const points = annotationRef.current;
+    if (!points.length) return;
+    const project = (p: AnnotationPoint): Pt => ({
+      x: m.a * (p.x * g.width) + m.c * (p.y * g.height) + m.e,
+      y: m.b * (p.x * g.width) + m.d * (p.y * g.height) + m.f,
+    });
+    const projected = points.map((p) => [p.name, project(p)] as const);
+    const anchorPoints = [anchorsRef.current.a, anchorsRef.current.b, anchorsRef.current.c].map(
+      ([x, y]) => ({ name: "", x, y })
+    ).map(project);
+
+    ctx.save();
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(anchorPoints[0].x, anchorPoints[0].y);
+    ctx.lineTo(anchorPoints[1].x, anchorPoints[1].y);
+    ctx.lineTo(anchorPoints[2].x, anchorPoints[2].y);
+    ctx.closePath();
+    ctx.stroke();
+
+    projected.forEach(([name, p]) => {
+      ctx.fillStyle = "#06b6d4";
       ctx.beginPath();
-      ctx.arc(lm[i].x * W, lm[i].y * H, 6, 0, 7);
+      ctx.arc(p.x, p.y, 5, 0, 7);
       ctx.fill();
+      ctx.strokeStyle = "#083344";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(8, 51, 68, 0.86)";
+      ctx.font = "11px system-ui";
+      const label = name.replace(/_/g, " ");
+      const w = ctx.measureText(label).width;
+      ctx.fillRect(p.x + 7, p.y - 18, w + 8, 16);
+      ctx.fillStyle = "#ecfeff";
+      ctx.fillText(label, p.x + 11, p.y - 6);
+    });
+    const count = `${points.length} annotation points`;
+    ctx.font = "12px system-ui";
+    const w = ctx.measureText(count).width;
+    ctx.fillStyle = "rgba(8, 51, 68, 0.86)";
+    ctx.fillRect(10, 10, w + 16, 22);
+    ctx.fillStyle = "#ecfeff";
+    ctx.fillText(count, 18, 26);
+    ctx.restore();
+  }
+
+  // Pose debug: full skeleton plus every MediaPipe pose landmark point.
+  function drawPoseDebug(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, lm: any[]) {
+    const W = canvas.width, H = canvas.height;
+    const P = (i: number) => ({ x: lm[i].x * W, y: lm[i].y * H });
+    const bones: [number, number][] = [
+      [LM.leftShoulder, LM.rightShoulder], [LM.leftShoulder, LM.leftElbow],
+      [LM.leftElbow, LM.leftWrist], [LM.rightShoulder, LM.rightElbow],
+      [LM.rightElbow, LM.rightWrist], [LM.leftShoulder, LM.leftHip],
+      [LM.rightShoulder, LM.rightHip], [LM.leftHip, LM.rightHip],
+      [LM.leftHip, LM.leftKnee], [LM.leftKnee, LM.leftAnkle],
+      [LM.rightHip, LM.rightKnee], [LM.rightKnee, LM.rightAnkle],
+    ];
+    ctx.save();
+    ctx.strokeStyle = "#22c55e"; ctx.lineWidth = 3;
+    for (const [i, j] of bones) {
+      if (!lm[i] || !lm[j]) continue;
+      const p = P(i), q = P(j);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
     }
+    lm.forEach((point, i) => {
+      if (!point) return;
+      const p = P(i);
+      ctx.fillStyle = "#16a34a";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, 7);
+      ctx.fill();
+      ctx.strokeStyle = "#dcfce7";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(20, 83, 45, 0.82)";
+      ctx.font = "10px system-ui";
+      const label = String(i);
+      const w = ctx.measureText(label).width;
+      ctx.fillRect(p.x + 5, p.y - 14, w + 6, 13);
+      ctx.fillStyle = "#f0fdf4";
+      ctx.fillText(label, p.x + 8, p.y - 4);
+    });
+    ctx.restore();
   }
 
   useEffect(() => () => stop(), []);
@@ -301,7 +460,6 @@ export default function LivePreview() {
           )}
           <button
             onClick={active ? stop : start}
-            disabled={!selectedGarment}
             className="rounded-md border border-neutral-300 px-3 py-1 font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
           >
             {active ? "Stop camera" : "Start camera"}
@@ -328,14 +486,17 @@ export default function LivePreview() {
             {status ||
               (isImageOnly(selectedGarment?.category)
                 ? "Saree is image-mode only — use the HD Image Try-On tab"
-                : selectedGarment
-                ? "Press Start camera for a real-time overlay"
-                : "Select a garment first")}
+                : "Press Start camera — pick a garment now or after it starts")}
           </div>
         )}
         {active && isImageOnly(selectedGarment?.category) && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
             Saree is image-mode only — switch to HD Image Try-On
+          </div>
+        )}
+        {active && !selectedGarment && poseOk && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+            Pick a garment to overlay it
           </div>
         )}
         {active && !poseOk && (
@@ -351,7 +512,7 @@ export default function LivePreview() {
       </div>
 
       {active && (
-        <div className="mt-2 flex gap-4 text-xs text-neutral-500">
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
           <label className="flex items-center gap-1.5">
             <input
               type="checkbox"
@@ -363,11 +524,29 @@ export default function LivePreview() {
           <label className="flex items-center gap-1.5">
             <input
               type="checkbox"
-              checked={showLandmarks}
-              onChange={(e) => setShowLandmarks(e.target.checked)}
+              checked={poseDebug}
+              onChange={(e) => setPoseDebug(e.target.checked)}
             />
-            Show landmarks
+            Pose debug (skeleton)
           </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={annoDebug}
+              onChange={(e) => setAnnoDebug(e.target.checked)}
+            />
+            Annotation debug (all keypoints)
+          </label>
+          {isDupatta && (
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showDupatta}
+                onChange={(e) => setShowDupatta(e.target.checked)}
+              />
+              Show dupatta
+            </label>
+          )}
         </div>
       )}
     </div>

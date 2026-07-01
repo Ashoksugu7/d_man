@@ -1,84 +1,68 @@
 # Virtual Try-On
 
-A virtual try-on platform: upload a photo and see garments composited onto you
-(HD image mode), or use a real-time webcam overlay (live mode). See
-[`virtual_tryon_project_plan.md`](./virtual_tryon_project_plan.md) for the full
-roadmap and [`task.md`](./task.md) for the task board.
+Try garments on a photo (HD image mode) or a live webcam overlay. Supports
+shirts, t-shirts, full-sleeve shirts, pants, and Indian attire (kurta, salwar/
+palazzo, dupatta, lehenga, saree). Garments live in a database and are managed
+through an in-app annotator. Body size estimation gives fit recommendations.
 
-## Sprint 1 status (Week 1–2) — ✅ complete
-
-- Monorepo scaffold: Next.js 14 + FastAPI + Docker
-- MediaPipe Pose in the browser (WASM) for the live overlay
-- Static garment overlay on an uploaded photo (affine transform)
-- 5 shirt PNG assets with keypoints
-- Local end-to-end demo
-- Staging config + CI ([`DEPLOY.md`](./DEPLOY.md))
+## Features
+- **HD Image Try-On** — upload a photo → garment composited on the body; async
+  pipeline with pluggable engines (see below) + a result gallery.
+- **Live Preview** — in-browser MediaPipe pose → real-time garment overlay
+  (EMA-smoothed, FPS meter, pose + fit debug overlays).
+- **Garment service** — Postgres-backed catalog; CRUD + image upload +
+  keypoint annotation via API and the in-app **/manage** page (create, edit,
+  archive).
+- **Size estimation** — height-calibrated measurements → per-garment fit badges.
+- **Realism (CPU)** — hand/arm occlusion, lighting match, optional TPS warp.
 
 ## Layout
-
 ```
-frontend/   Next.js 14 (App Router, Tailwind, Zustand) + MediaPipe WASM
-backend/    FastAPI: pose (MediaPipe) → affine warp → composite
-assets/     Garment PNGs + keypoint JSON + catalog.json (generate_shirts.py)
-.github/    CI pipeline
+frontend/   Next.js (App Router, Tailwind, Zustand) + MediaPipe WASM
+              app/page.tsx (try-on), app/manage (garment manager)
+backend/    FastAPI: pose (MediaPipe) → affine/category warp → composite
+              app/db.py, models.py, garments_repo.py, garments_api.py (DB service)
+              app/inference.py, jobs.py (HD engines + Celery)
+assets/     Garment images + keypoint JSON + catalog.json (generated cache)
+tools/      annotate.html (standalone annotator; superseded by /manage)
 ```
 
-## Run locally (Docker)
+## HD engines (`HD_ENGINE`)
+| value | where | notes |
+|---|---|---|
+| `catvton` (default) | MPS/CUDA | real VTON; needs `CATVTON_REPO` |
+| `replicate` | cloud | hosted IDM-VTON; needs `REPLICATE_API_TOKEN` (paid) |
+| `local` | MPS/CUDA | diffusers SD1.5-inpaint + IP-Adapter |
+| `stub` | CPU | affine composite; instant, for wiring/tests |
 
+## Requirements
+- **Python 3.12** for the backend (mediapipe/opencv have no 3.14 wheels yet).
+- Node 18+ for the frontend.
+- **PostgreSQL** (garment DB) and **Redis** (HD job queue).
+
+## Run (local)
 ```bash
-docker compose up --build
-# frontend → http://localhost:3000
-# backend  → http://localhost:8000  (/api/health, /api/garments)
+cp backend/.env.example backend/.env      # adjust DATABASE_URL etc.
+make install                              # backend + frontend deps
+make seed                                 # import catalog.json → DB
+make api                                  # FastAPI :8000
+make worker                               # Celery HD worker (separate terminal)
+make web                                  # Next.js :3000
+# or: make dev   (runs all three)
 ```
+Backend auto-creates the `vton_*` tables and seeds from `catalog.json` on start.
 
-## Run locally (no Docker)
+## Add a garment
+Open **http://localhost:3000/manage** → New garment → upload a real product
+image (plain/transparent background) → **Guess** keypoints then drag to adjust →
+Create. It’s written to the DB and appears in the try-on grid immediately.
+(Real garment photos matter — see `assets/GARMENT_IMAGES.md`.)
 
+## Tests
 ```bash
-# 1. Assets
-cd assets && pip install pillow && python generate_shirts.py && cd ..
-
-# 2. Backend
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-# new terminal:
-
-# 3. Frontend
-cd frontend
-npm install
-npm run dev   # http://localhost:3000
+make test    # backend smoke tests (pipeline, measure, HD jobs)
 ```
 
-## How the image pipeline works
-
-1. `POST /api/tryon/image` receives the photo + `garment_id`.
-2. MediaPipe Pose extracts shoulder/hip landmarks (heuristic fallback if
-   MediaPipe is unavailable, so tests run anywhere).
-3. A 2×3 affine transform maps the garment's shoulder/hem anchors onto the
-   body landmarks (`backend/app/warp.py`).
-4. The warped garment is alpha-composited and saved; the URL is returned.
-
-TPS warping, human parsing, and diffusion try-on come in later phases.
-
-## Test
-
-```bash
-python backend/test_pipeline.py   # synthetic person → overlay → assertion
-```
-
-## Image formats
-
-PNG, JPEG, and **WebP** are supported for both uploaded photos and garment
-assets (libwebp ships with Pillow and OpenCV). WebP garments may keep an alpha
-channel for transparency. Results are PNG by default; pass `output_format=webp`
-to `POST /api/tryon/image` for smaller WebP output.
-
-## Replace placeholder garments
-
-`assets/generate_shirts.py` produces simple flat-color shirts so the demo runs
-end-to-end. Drop real transparent-background PNGs in `assets/garments/`, add
-matching keypoint JSON (collar / shoulders / hem / sleeves) and a `catalog.json`
-entry in the same format.
-
-cd /Users/sugumarm/Projects/virtual_try_on/d_man/backend
-./run_worker.sh
+## More docs
+`GARMENT_SERVICE_PLAN.md` (DB service phases), `PHASE3_NOTES.md`–`PHASE6_NOTES.md`,
+`CONTEXT.md` (handoff), `BROWSER_QA.md`, `DEPLOY.md`, `task.md` (roadmap).

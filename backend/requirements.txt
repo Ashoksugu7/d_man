@@ -1,9 +1,31 @@
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-python-multipart==0.0.9
-pillow==10.3.0
-numpy==1.26.4
-opencv-python-headless==4.10.0.84
-mediapipe==0.10.14
-celery==5.4.0
-redis==5.0.7
+# Backend dependencies.
+#
+# ⚠️ PYTHON 3.14 NOTE (verified June 2026):
+#   Two native deps below do NOT yet ship cp314 wheels:
+#     - mediapipe              (official support is Python 3.9–3.12 only)
+#     - opencv-python-headless (no 3.14 wheels; would try to build from source)
+#   On a 3.14 venv, `pip install -r requirements.txt` will FAIL.
+#   Recommended: run the backend on **Python 3.12** (a 3.12 venv installs all of
+#   this cleanly).
+#   Track: mediapipe (google-ai-edge/mediapipe), opencv-python issue #1155.
+#
+# The pose stack intentionally targets the MediaPipe legacy solutions API.
+
+# --- Core API/runtime ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.12
+pillow>=11.3.0
+celery>=5.4.0
+redis>=5.2.0
+
+# --- Garment service (Phase A): async Postgres via SQLAlchemy ---
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0        # Postgres async driver
+alembic>=1.13.0        # migrations
+aiosqlite>=0.20.0      # dev/test only (lets the suite run without Postgres)
+
+# --- Pose stack (need Python <=3.12; uses mp.solutions) ---
+numpy>=1.26.4,<2        # mediapipe 0.10.21 legacy solutions API requires NumPy 1.x
+opencv-python-headless>=4.11.0,<4.12
+mediapipe>=0.10.21,<0.10.35      # 0.10.35 removed mp.solutions used by app/pose.py

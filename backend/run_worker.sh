@@ -4,7 +4,10 @@ set -euo pipefail
 BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
 
-if [ -d "$ROOT_DIR/.venv" ]; then
+if [ -d "$ROOT_DIR/.venv312" ]; then
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.venv312/bin/activate"
+elif [ -d "$ROOT_DIR/.venv" ]; then
   # shellcheck disable=SC1091
   source "$ROOT_DIR/.venv/bin/activate"
 elif [ -d "$BACKEND_DIR/.venv" ]; then

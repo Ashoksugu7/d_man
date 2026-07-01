@@ -15,9 +15,15 @@ import numpy as np
 import cv2
 
 try:
-    import mediapipe as mp  # noqa: F401
-    _MP = True
+    import mediapipe as mp
+    _MP_SELFIE_SEGMENTATION = getattr(
+        getattr(getattr(mp, "solutions", None), "selfie_segmentation", None),
+        "SelfieSegmentation",
+        None,
+    )
+    _MP = _MP_SELFIE_SEGMENTATION is not None
 except Exception:  # pragma: no cover
+    _MP_SELFIE_SEGMENTATION = None
     _MP = False
 
 
@@ -27,10 +33,9 @@ def person_silhouette(image_rgb: np.ndarray) -> np.ndarray:
     Falls back to all-foreground if MediaPipe is unavailable.
     """
     h, w = image_rgb.shape[:2]
-    if not _MP:
+    if not _MP or _MP_SELFIE_SEGMENTATION is None:
         return np.full((h, w), 255, np.uint8)
-    import mediapipe as mp
-    with mp.solutions.selfie_segmentation.SelfieSegmentation(model_selection=1) as seg:
+    with _MP_SELFIE_SEGMENTATION(model_selection=1) as seg:
         res = seg.process(image_rgb)
     if res.segmentation_mask is None:
         return np.full((h, w), 255, np.uint8)

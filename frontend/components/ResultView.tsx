@@ -10,6 +10,7 @@ import {
   resultUrl,
 } from "@/lib/api";
 import { addToGallery } from "@/lib/gallery";
+import BeforeAfter from "@/components/BeforeAfter";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -35,6 +36,8 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
   } = useStore();
 
   const [debug, setDebug] = useState(false);
+  const [lighting, setLighting] = useState(false);
+  const [tps, setTps] = useState(false);
   const [hdProgress, setHdProgress] = useState<number | null>(null);
   const [hdMessage, setHdMessage] = useState("");
   const [hdEngine, setHdEngine] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
     setLoading(true);
     setError(null);
     try {
-      const r = await requestTryOn(selectedGarment.id, photo, debug);
+      const r = await requestTryOn(selectedGarment.id, photo, { debug, lighting, tps });
       setResult(r);
       saveToGallery(r, "image");
     } catch (e: any) {
@@ -164,14 +167,20 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
         </p>
       )}
 
-      <label className="mb-3 flex items-center gap-2 text-xs text-neutral-500">
-        <input
-          type="checkbox"
-          checked={debug}
-          onChange={(e) => setDebug(e.target.checked)}
-        />
-        Debug overlay (show detected pose + fit target)
-      </label>
+      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
+          Debug overlay
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={lighting} onChange={(e) => setLighting(e.target.checked)} />
+          Match lighting
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={tps} onChange={(e) => setTps(e.target.checked)} />
+          TPS warp (tops)
+        </label>
+      </div>
 
       <div className="mb-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
         <label className="block text-xs font-medium text-neutral-700">
@@ -236,30 +245,25 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <figure>
-          <figcaption className="mb-1 text-xs text-neutral-400">Before</figcaption>
-          <div className="aspect-[3/4] overflow-hidden rounded-lg border border-neutral-200 bg-white">
-            {photoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="before" className="h-full w-full object-contain" />
-            )}
-          </div>
-        </figure>
-        <figure>
-          <figcaption className="mb-1 text-xs text-neutral-400">After</figcaption>
-          <div className="aspect-[3/4] overflow-hidden rounded-lg border border-neutral-200 bg-white">
-            {result && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={resultUrl(result.result_url)}
-                alt="after"
-                className="h-full w-full object-contain"
-              />
-            )}
-          </div>
-        </figure>
-      </div>
+      {/* Result: drag the slider to compare before/after. */}
+      {result ? (
+        <>
+          <BeforeAfter
+            before={photoUrl || ""}
+            after={resultUrl(result.result_url)}
+            alt="try-on result"
+          />
+          <p className="mt-1 text-center text-[11px] text-neutral-400">Drag to compare</p>
+        </>
+      ) : loading || hdProgress !== null ? (
+        <div className="aspect-[3/4] w-full animate-pulse rounded-lg border border-neutral-200 bg-neutral-100" />
+      ) : (
+        <div className="flex aspect-[3/4] w-full items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 text-center text-sm text-neutral-400">
+          {!photo
+            ? "Upload a photo and pick a garment to start"
+            : "Press “Try it on” or “HD render” to see the result"}
+        </div>
+      )}
 
       {result && (
         <a

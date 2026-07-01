@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.venv312/
 
 # Generated try-on results (runtime output)
 backend/storage/
@@ -16,6 +17,6 @@ backend/storage/
 # Env
 .env
 .env.local
-
 # OS
 .DS_Store
+assets/*

@@ -9,15 +9,21 @@ export async function fetchGarments(): Promise<Garment[]> {
   return res.json();
 }
 
+export type TryOnOpts = { debug?: boolean; occlude?: boolean; lighting?: boolean; tps?: boolean };
+
 export async function requestTryOn(
   garmentId: string,
   photo: File,
-  debug = false
+  opts: TryOnOpts = {}
 ): Promise<TryOnResult> {
   const form = new FormData();
   form.append("garment_id", garmentId);
   form.append("photo", photo);
-  if (debug) form.append("debug", "true");
+  if (opts.debug) form.append("debug", "true");
+  // realism flags (occlude defaults on server-side to true)
+  if (opts.occlude === false) form.append("occlude", "false");
+  if (opts.lighting) form.append("lighting", "true");
+  if (opts.tps) form.append("tps", "true");
   const res = await fetch(`${API_BASE}/api/tryon/image`, {
     method: "POST",
     body: form,
@@ -81,6 +87,65 @@ export async function pollHdJob(jobId: string): Promise<HdJobStatus> {
   if (!res.ok) throw new Error("Failed to poll HD job");
   return res.json();
 }
+
+// --- Garment management (Phase C) ------------------------------------------
+export type Keypoints = {
+  keypoints_norm?: Record<string, [number, number]>;
+  keypoints_px?: Record<string, [number, number]>;
+  canvas?: [number, number];
+};
+
+async function jf(path: string, opts: RequestInit): Promise<any> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export const getGarment = (id: string) => jf(`/api/garments/${id}`, { method: "GET" });
+
+export const createGarment = (b: {
+  id?: string; name: string; category: string; size_chart?: any;
+  fit_params?: Record<string, number>; image_only?: boolean;
+}) => jf(`/api/garments`, { method: "POST", body: JSON.stringify(b) });
+
+export const updateGarment = (id: string, b: Record<string, unknown>) =>
+  jf(`/api/garments/${id}`, { method: "PUT", body: JSON.stringify(b) });
+
+export const archiveGarment = (id: string) =>
+  fetch(`${API_BASE}/api/garments/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+export async function uploadGarmentImage(
+  id: string, file: File, role?: string, removeBg = false
+) {
+  const form = new FormData();
+  form.append("photo", file);
+  if (role) form.append("role", role);
+  if (removeBg) form.append("remove_bg", "true");
+  const res = await fetch(`${API_BASE}/api/garments/${id}/image`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Upload failed");
+  return res.json();
+}
+
+export const listVersions = (id: string) =>
+  jf(`/api/garments/${id}/versions`, { method: "GET" });
+
+export const revertVersion = (id: string, versionId: string) =>
+  jf(`/api/garments/${id}/revert/${versionId}`, { method: "POST" });
+
+export const saveAnnotation = (id: string, keypoints: Keypoints, role?: string) =>
+  jf(`/api/garments/${id}/annotation`, {
+    method: "POST",
+    body: JSON.stringify({ keypoints, role: role || null }),
+  });
 
 export function assetUrl(path: string): string {
   return `${API_BASE}/assets/${path}`;

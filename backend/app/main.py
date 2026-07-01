@@ -44,12 +44,44 @@ app.add_middleware(
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 app.mount("/results", StaticFiles(directory=str(RESULTS_DIR)), name="results")
 
+# Garment CRUD + image/annotation API (Phase B).
+from .garments_api import router as garments_router  # noqa: E402
+app.include_router(garments_router)
+
 
 def _load_catalog():
     path = ASSETS_DIR / "catalog.json"
     if not path.exists():
         return []
     return json.loads(path.read_text())
+
+
+async def _list_garments() -> list[dict]:
+    """All active garments — from the DB when available, else catalog.json."""
+    if getattr(app.state, "db_ready", False):
+        try:
+            from .db import SessionLocal
+            from .garments_repo import list_active
+            async with SessionLocal() as session:
+                return await list_active(session)
+        except Exception:
+            pass
+    return _load_catalog()
+
+
+async def _get_garment(gid: str) -> dict | None:
+    """One garment (catalog shape) — from the DB when available, else catalog."""
+    if getattr(app.state, "db_ready", False):
+        try:
+            from .db import SessionLocal
+            from .garments_repo import get_serialized
+            async with SessionLocal() as session:
+                g = await get_serialized(session, gid)
+                if g:
+                    return g
+        except Exception:
+            pass
+    return next((g for g in _load_catalog() if g["id"] == gid), None)
 
 
 async def _decode_photo(photo: UploadFile) -> np.ndarray:
@@ -114,8 +146,34 @@ def health():
     return {"status": "ok", "mediapipe": mediapipe_available()}
 
 
+@app.on_event("startup")
+async def _init_db():
+    """Create tables + seed from catalog on startup. If the DB is unreachable,
+    the app still runs and falls back to catalog.json (Phase A safety)."""
+    app.state.db_ready = False
+    try:
+        from .db import create_all, SessionLocal
+        from .garments_repo import seed_from_catalog, count
+        await create_all()
+        async with SessionLocal() as session:
+            if await count(session) == 0:
+                await seed_from_catalog(session)
+        app.state.db_ready = True
+    except Exception as e:  # pragma: no cover - depends on external DB
+        print(f"[garment-db] unavailable, falling back to catalog.json: {e}")
+
+
 @app.get("/api/garments")
-def garments():
+async def garments():
+    """Garments from the DB (Phase A); falls back to catalog.json if DB is down."""
+    if getattr(app.state, "db_ready", False):
+        try:
+            from .db import SessionLocal
+            from .garments_repo import list_active
+            async with SessionLocal() as session:
+                return await list_active(session)
+        except Exception as e:
+            print(f"[garment-db] read failed, using catalog.json: {e}")
     return _load_catalog()
 
 
@@ -125,9 +183,11 @@ async def tryon_image(
     photo: UploadFile = File(...),
     output_format: str = Form("png"),
     debug: bool = Form(False),
+    occlude: bool = Form(True),
+    lighting: bool = Form(False),
+    tps: bool = Form(False),
 ):
-    catalog = _load_catalog()
-    garment = next((g for g in catalog if g["id"] == garment_id), None)
+    garment = await _get_garment(garment_id)
     if garment is None:
         raise HTTPException(404, f"Unknown garment_id: {garment_id}")
 
@@ -164,7 +224,9 @@ async def tryon_image(
     else:
         garment_rgba, garment_kp = _load_piece(garment["image"], garment["keypoints"])
         result_bgr = warp_and_composite(
-            user_bgr, garment_rgba, garment_kp, body_kp, category
+            user_bgr, garment_rgba, garment_kp, body_kp, category,
+            occlude=occlude, lighting=lighting, tps=tps,
+            fit_overrides=garment.get("fit_params"),
         )
     if debug:
         # Overlay detected landmarks + target quad so pose vs warp errors are
@@ -220,7 +282,7 @@ async def measure(
             ),
         })
 
-    catalog = _load_catalog()
+    catalog = await _list_garments()
     recommendations = {}
     for g in catalog:
         rec = recommend_size(
@@ -255,8 +317,7 @@ async def tryon_hd(
     The heavy work runs in a Celery worker (see app/jobs.py); poll
     GET /api/tryon/hd/{job_id} for status, progress, and the result URL.
     """
-    catalog = _load_catalog()
-    if not any(g["id"] == garment_id for g in catalog):
+    if await _get_garment(garment_id) is None:
         raise HTTPException(404, f"Unknown garment_id: {garment_id}")
 
     raw = await photo.read()

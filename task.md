@@ -24,8 +24,8 @@
 ### Backend
 - [x] Create `POST /api/tryon/image` endpoint
 - [x] Integrate MediaPipe Pose for keypoint extraction
-- [ ] Build human parsing module (torso segmentation)
-- [ ] Implement TPS (Thin Plate Spline) cloth warping  <!-- Sprint 1 uses affine; TPS later -->
+- [~] Build human parsing module (torso segmentation)  <!-- lightweight: preprocess.py MediaPipe silhouette + clothing region; full SCHP later -->
+- [x] Implement TPS (Thin Plate Spline) cloth warping  <!-- opt-in tps_refine_top (TRYON_TPS); affine default -->
 - [x] Return warped garment overlay on user photo
 
 ### Garment Assets
@@ -102,7 +102,7 @@
 ### Dupatta
 - [x] Drape overlay anchored at shoulders  <!-- top-style warp, translucent PNG alpha -->
 - [x] Static drape position for image mode
-- [ ] Optional: toggle dupatta on/off in UI  <!-- not added yet -->
+- [x] Optional: toggle dupatta on/off in UI  <!-- live "Show dupatta" checkbox -->
 
 <!-- Phase 5 (kurta/salwar/dupatta/lehenga) done with placeholder assets +
      category-aware affine warp (HD/image/live) + annotation schemes. Saree
@@ -124,11 +124,16 @@
 
 ## Phase 6 — Realism & Polish (Weeks 23–28)
 
-- [ ] Hand/arm occlusion: mask hands over garment layer
+- [x] Hand/arm occlusion: mask hands over garment layer  <!-- forearm/hand mask from elbow/wrist; TRYON_OCCLUDE -->
 - [ ] Side-turn tolerance: handle ±30° yaw without garment distortion
-- [ ] Cloth fold simulation (leverage diffusion model outputs)
-- [ ] Lighting adaptation: match garment brightness/shadow to scene
-- [ ] Robustness testing on diverse body shapes and skin tones
+- [ ] Cloth fold simulation (leverage diffusion model outputs)  <!-- needs diffusion model -->
+- [x] Lighting adaptation: match garment brightness/shadow to scene  <!-- match_lighting(); opt-in toggle -->
+- [ ] Robustness testing on diverse body shapes and skin tones  <!-- needs real data -->
+
+<!-- Phase 6 no-GPU slice done: hand/arm occlusion, lighting match, TPS warp
+     (opt-in), dupatta on/off. UI toggles in HD Image tab + live. See
+     PHASE6_NOTES.md. Remaining: side-turn, cloth folds (diffusion), diverse-
+     body validation, video, perf — GPU/data dependent. Uncommitted. -->
 - [ ] Video try-on MVP: temporal consistency across frames
 - [ ] Performance profiling + GPU cost optimization
 - [ ] Final QA pass across all garment categories
