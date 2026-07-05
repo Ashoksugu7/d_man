@@ -31,6 +31,7 @@ const Annotator = forwardRef<AnnotatorHandle, Props>(function Annotator(
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [pts, setPts] = useState<Record<string, Pt>>({}); // image-pixel coords
   const [dims, setDims] = useState<[number, number]>([0, 0]);
+  const [loadError, setLoadError] = useState(false);
   const scaleRef = useRef(1);
   const dragRef = useRef<string | null>(null);
 
@@ -50,31 +51,56 @@ const Annotator = forwardRef<AnnotatorHandle, Props>(function Annotator(
     },
   }));
 
-  // Load image (File or URL)
+  // Load image (File or URL).
+  // CORS note: we WANT crossOrigin so guess() can read pixels — but if the
+  // same URL was already cached by a plain <img> (the garment grid), the
+  // cached response has no CORS header and the anonymous request fails.
+  // So: try CORS with a cache-busting query; on failure fall back to a
+  // plain load (image still displays; guess() then uses the full frame).
   useEffect(() => {
     if (!imageSrc) return;
-    const url = typeof imageSrc === "string" ? imageSrc : URL.createObjectURL(imageSrc);
-    const im = new Image();
-    if (typeof imageSrc === "string") im.crossOrigin = "anonymous";
-    im.onload = () => {
-      imgRef.current = im;
-      setDims([im.naturalWidth, im.naturalHeight]);
-      // preload initial keypoints (edit mode)
-      if (initialNorm) {
-        const p: Record<string, Pt> = {};
-        for (const n of scheme.order) {
-          const v = initialNorm[n];
-          if (v) p[n] = { x: v[0] * im.naturalWidth, y: v[1] * im.naturalHeight };
-        }
-        setPts(p);
-      } else {
+    setLoadError(false);
+    const isUrl = typeof imageSrc === "string";
+    const url = isUrl ? imageSrc : URL.createObjectURL(imageSrc);
+    let disposed = false;
+
+    const attempt = (cors: boolean) => {
+      const im = new Image();
+      if (cors) im.crossOrigin = "anonymous";
+      im.onload = () => {
+        if (disposed) return;
+        imgRef.current = im;
+        setDims([im.naturalWidth, im.naturalHeight]);
         setPts({});
-      }
+      };
+      im.onerror = () => {
+        if (disposed) return;
+        if (cors) attempt(false);
+        else setLoadError(true);
+      };
+      im.src = cors && isUrl
+        ? url + (url.includes("?") ? "&" : "?") + "cors=1"
+        : url;
     };
-    im.src = url;
-    return () => { if (typeof imageSrc !== "string") URL.revokeObjectURL(url); };
+    attempt(isUrl);
+    return () => { disposed = true; if (!isUrl) URL.revokeObjectURL(url); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageSrc, scheme]);
+
+  // Apply saved keypoints whenever they arrive. In edit mode the keypoint
+  // JSON is fetched async and often lands AFTER the image loaded — a separate
+  // effect (keyed on initialNorm + dims) catches that instead of losing it.
+  useEffect(() => {
+    const [w, h] = dims;
+    if (!w || !h || !initialNorm) return;
+    const p: Record<string, Pt> = {};
+    for (const n of scheme.order) {
+      const v = initialNorm[n];
+      if (v) p[n] = { x: v[0] * w, y: v[1] * h };
+    }
+    if (Object.keys(p).length) setPts(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNorm, dims]);
 
   // Draw
   useEffect(() => {
@@ -131,13 +157,7 @@ const Annotator = forwardRef<AnnotatorHandle, Props>(function Annotator(
     if (has("left_ankle") && has("right_waist")) {           // pant
       src = [pts.right_waist, pts.left_waist, mid(pts.left_ankle, pts.right_ankle)];
       dst = [{ x: W * 0.42, y: H * 0.58 }, { x: W * 0.58, y: H * 0.58 }, { x: W * 0.5, y: H * 0.96 }];
-    } else if (has("top_left") && has("left_hem")) {         // pallu
-      src = [pts.top_right, pts.top_left, mid(pts.left_hem, pts.right_hem)];
-      dst = [{ x: W * 0.30, y: H * 0.24 }, { x: W * 0.70, y: H * 0.24 }, { x: W * 0.5, y: H * 0.7 }];
-    } else if (has("left_waist") && has("left_hem")) {       // skirt
-      src = [pts.right_waist, pts.left_waist, mid(pts.left_hem, pts.right_hem)];
-      dst = [{ x: W * 0.42, y: H * 0.58 }, { x: W * 0.58, y: H * 0.58 }, { x: W * 0.5, y: H * 0.95 }];
-    } else if (has("left_shoulder") && has("left_hem")) {    // top / dupatta
+    } else if (has("left_shoulder") && has("left_hem")) {    // top
       src = [pts.right_shoulder, pts.left_shoulder, mid(pts.left_hem, pts.right_hem)];
       dst = [{ x: W * 0.30, y: H * 0.26 }, { x: W * 0.70, y: H * 0.26 }, { x: W * 0.5, y: H * 0.66 }];
     }
@@ -232,6 +252,11 @@ const Annotator = forwardRef<AnnotatorHandle, Props>(function Annotator(
           className="block cursor-crosshair"
         />
         {!imageSrc && <div className="p-6 text-center text-sm text-neutral-400">Upload an image to annotate</div>}
+        {imageSrc && loadError && (
+          <div className="p-6 text-center text-sm text-red-500">
+            Could not load the garment image — is the backend running? (assets URL)
+          </div>
+        )}
       </div>
       <div className="mt-2 flex gap-3">
         <ol className="flex-1 space-y-0.5 text-[11px]">

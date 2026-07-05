@@ -1,7 +1,7 @@
 """ORM models for the garment service (Phase A).
 
-A single-piece garment uses `Garment` only. Multi-piece garments (lehenga,
-saree) add `GarmentPiece` rows (blouse / skirt / drape / pallu).
+A single-piece garment uses `Garment` only. `GarmentPiece` remains for schema
+compatibility (multi-piece garments are no longer supported).
 
 Keypoints are stored both as a file path (kept working with the existing
 /assets static mount + try-on loaders) and inline as JSON, so later phases can
@@ -53,7 +53,7 @@ class GarmentPiece(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
     garment_id: Mapped[str] = mapped_column(
         ForeignKey(f"{TABLE_PREFIX}garment.id", ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # blouse|skirt|drape|pallu
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
     image_path: Mapped[str] = mapped_column(Text, nullable=False)
     keypoints_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     keypoints: Mapped[dict | None] = mapped_column(JsonType, nullable=True)

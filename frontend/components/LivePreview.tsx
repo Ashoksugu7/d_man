@@ -4,12 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { assetUrl } from "@/lib/api";
 import {
-  EMASmoother,
+  OneEuroSmoother,
   LM,
   Pt,
   bodyTargets,
   pantTargets,
-  skirtTargets,
   kindFor,
   topHem,
   solveAffine3,
@@ -33,10 +32,6 @@ const FALLBACK_ANCHORS: Anchors = {
   c: [0.5, 0.8857],
 };
 
-// kindFor maps category -> top | pant | skirt | lehenga (lehenga live = skirt).
-// Saree is image-mode only (multi-region drape) — not supported in live.
-const isImageOnly = (cat?: string) => (cat || "").toLowerCase() === "saree";
-
 const MIN_VISIBILITY = 0.5; // skip overlay if shoulders aren't confidently seen
 const LOST_GRACE_MS = 500; // keep last garment briefly when pose flickers
 
@@ -49,31 +44,35 @@ export default function LivePreview() {
   const annotationRef = useRef<AnnotationPoint[]>([]);
   const rafRef = useRef<number | null>(null);
   const landmarkerRef = useRef<any>(null);
-  const smootherRef = useRef(new EMASmoother(0.4));
+  const smootherRef = useRef(new OneEuroSmoother());
   const lastSeenRef = useRef<number>(0);
+  const lastVideoTimeRef = useRef<number>(-1);
+  const lastLmRef = useRef<any[] | null>(null);
+  // Affine matrix computed once per NEW detection and reused for every rAF
+  // tick in between — between camera frames the garment must not move at all.
+  const matrixRef = useRef<AffineMatrix | null>(null);
+  const newDetRef = useRef(false);
 
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState("");
   const [mirror, setMirror] = useState(true);
   const [fps, setFps] = useState(0);
   const [poseOk, setPoseOk] = useState(false);
-  const [showDupatta, setShowDupatta] = useState(true);
   // Debug overlays (refs because the render loop reads them every frame).
   const [poseDebug, setPoseDebug] = useState(false);
   const [annoDebug, setAnnoDebug] = useState(false);
-  const showDupattaRef = useRef(true);
   const poseDebugRef = useRef(false);
   const annoDebugRef = useRef(false);
-  useEffect(() => { showDupattaRef.current = showDupatta; }, [showDupatta]);
   useEffect(() => { poseDebugRef.current = poseDebug; }, [poseDebug]);
   useEffect(() => { annoDebugRef.current = annoDebug; }, [annoDebug]);
-  const isDupatta = (selectedGarment?.category || "").toLowerCase() === "dupatta";
   const [garmentError, setGarmentError] = useState(false);
 
   // Preload selected garment image + anchors
   useEffect(() => {
     if (!selectedGarment) return;
     garmentImgRef.current = null;
+    matrixRef.current = null;      // stale matrix belongs to the old garment
+    smootherRef.current.reset();
     setGarmentError(false);
     const img = new Image();
     // No crossOrigin: we only display the live canvas, never read its pixels,
@@ -111,14 +110,6 @@ export default function LivePreview() {
           anchorsRef.current = {
             a: n.right_waist, b: n.left_waist,
             c: ankle,
-          };
-        } else if (kind === "skirt" || kind === "lehenga") {
-          // lehenga's primary keypoints file is the skirt (waist + hem)
-          const hem = hemMid("left_hem", "right_hem");
-          if (!n.right_waist || !n.left_waist || !hem) return;
-          anchorsRef.current = {
-            a: n.right_waist, b: n.left_waist,
-            c: hem,
           };
         } else {
           const hem = hemMid("left_hem", "right_hem");
@@ -185,7 +176,7 @@ export default function LivePreview() {
       landmarkerRef.current = await PoseLandmarker.createFromOptions(fileset, {
         baseOptions: {
           modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
           delegate: "GPU",
         },
         runningMode: "VIDEO",
@@ -213,6 +204,11 @@ export default function LivePreview() {
     const stream = video?.srcObject as MediaStream | null;
     stream?.getTracks().forEach((t) => t.stop());
     if (video) video.srcObject = null;
+    lastVideoTimeRef.current = -1;
+    lastLmRef.current = null;
+    matrixRef.current = null;
+    newDetRef.current = false;
+    smootherRef.current.reset();
     setActive(false);
     setPoseOk(false);
   }
@@ -228,13 +224,34 @@ export default function LivePreview() {
 
     const render = () => {
       if (video.readyState >= 2) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        // Resize only when dimensions actually change (assigning width/height
+        // clears the canvas state and forces layout work every frame).
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        const res = landmarker.detectForVideo(video, performance.now());
-        const lm = res.landmarks?.[0];
+        // Detect only when the camera produced a NEW frame. rAF often ticks
+        // faster (60–120Hz) than the camera (~30fps); re-detecting the same
+        // frame returns slightly different landmarks each time — that
+        // detection noise is visible as shake — and wastes CPU.
+        if (video.currentTime !== lastVideoTimeRef.current) {
+          lastVideoTimeRef.current = video.currentTime;
+          const res = landmarker.detectForVideo(video, performance.now());
+          const det = res.landmarks?.[0] ?? null;
+          if (det && det.length > LM.rightHip) {
+            lastLmRef.current = det;
+            lastSeenRef.current = performance.now();
+            newDetRef.current = true; // recompute the garment fit once
+          }
+        }
+
+        // Hold the last good pose through brief detection dropouts so the
+        // garment doesn't flicker off/on (another source of visible shake).
+        const lostFor = performance.now() - lastSeenRef.current;
+        const lm = lostFor <= LOST_GRACE_MS ? lastLmRef.current : null;
         const g = garmentImgRef.current;
 
         // Gate on landmark *presence*, not visibility: tasks-vision frequently
@@ -242,26 +259,21 @@ export default function LivePreview() {
         // visibility threshold would reject every valid frame. We only use
         // visibility to suppress clearly-occluded shoulders, and only when the
         // model actually provides a non-zero score.
-        const hasPose = !!lm && lm.length > LM.rightHip;
         const lvis = lm?.[LM.leftShoulder]?.visibility ?? 0;
         const rvis = lm?.[LM.rightShoulder]?.visibility ?? 0;
         const visScored = lvis > 0 || rvis > 0; // model populated visibility?
-        const visOk =
-          hasPose && (!visScored || Math.max(lvis, rvis) > MIN_VISIBILITY);
+        const visOk = !!lm && (!visScored || Math.max(lvis, rvis) > MIN_VISIBILITY);
 
         if (lm && visOk) {
-          // Pose is detected regardless of whether the garment image is ready.
-          lastSeenRef.current = performance.now();
           setPoseOk(true);
           const garmentMatrix = g ? drawGarment(ctx, canvas, lm, g) : null;
           if (annoDebugRef.current) drawAnnoDebug(ctx, g, garmentMatrix);
           if (poseDebugRef.current) drawPoseDebug(ctx, canvas, lm);
-        } else {
-          const lostFor = performance.now() - lastSeenRef.current;
-          if (lostFor > LOST_GRACE_MS) {
-            setPoseOk(false);
-            smootherRef.current.reset();
-          }
+        } else if (lostFor > LOST_GRACE_MS) {
+          setPoseOk(false);
+          smootherRef.current.reset();
+          lastLmRef.current = null;
+          matrixRef.current = null;
         }
 
         // FPS (rolling, updated ~2x/sec)
@@ -290,14 +302,6 @@ export default function LivePreview() {
       } as any) as any;
       const { rw, lw, ankle } = pantTargets(s);
       return [rw, lw, ankle];
-    }
-    if (kind === "skirt" || kind === "lehenga") {
-      const s = smootherRef.current.smooth({
-        rightHip: px(LM.rightHip), leftHip: px(LM.leftHip),
-        rightAnkle: px(LM.rightAnkle), leftAnkle: px(LM.leftAnkle),
-      } as any) as any;
-      const { rw, lw, hemMid } = skirtTargets(s);
-      return [rw, lw, hemMid];
     }
     const s = smootherRef.current.smooth({
       rightShoulder: px(LM.rightShoulder), leftShoulder: px(LM.leftShoulder),
@@ -330,10 +334,14 @@ export default function LivePreview() {
     lm: any[],
     g: HTMLImageElement
   ): AffineMatrix | null {
-    if (isImageOnly(selectedGarment?.category)) return null; // saree: image mode only
-    if ((selectedGarment?.category || "").toLowerCase() === "dupatta" &&
-        !showDupattaRef.current) return null; // dupatta toggled off
-    const m = affineFor(lm, canvas, g);
+    // Recompute the fit only when a NEW detection arrived; between camera
+    // frames the cached matrix is reused so the garment is perfectly still.
+    let m = matrixRef.current;
+    if (newDetRef.current || !m) {
+      newDetRef.current = false;
+      m = affineFor(lm, canvas, g);
+      matrixRef.current = m;
+    }
     if (!m) return null;
 
     ctx.save();
@@ -483,15 +491,7 @@ export default function LivePreview() {
         />
         {!active && (
           <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-neutral-400">
-            {status ||
-              (isImageOnly(selectedGarment?.category)
-                ? "Saree is image-mode only — use the HD Image Try-On tab"
-                : "Press Start camera — pick a garment now or after it starts")}
-          </div>
-        )}
-        {active && isImageOnly(selectedGarment?.category) && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-            Saree is image-mode only — switch to HD Image Try-On
+            {status || "Press Start camera — pick a garment now or after it starts"}
           </div>
         )}
         {active && !selectedGarment && poseOk && (
@@ -537,16 +537,6 @@ export default function LivePreview() {
             />
             Annotation debug (all keypoints)
           </label>
-          {isDupatta && (
-            <label className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={showDupatta}
-                onChange={(e) => setShowDupatta(e.target.checked)}
-              />
-              Show dupatta
-            </label>
-          )}
         </div>
       )}
     </div>

@@ -15,11 +15,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent          # backend/
 REPO_DIR = BASE_DIR.parent
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", REPO_DIR / "assets"))
 
-# role -> (image_field, keypoints_field) in the catalog JSON shape
-_PIECE_FIELDS = {
-    "blouse": ("blouse_image", "blouse_keypoints"),
-    "pallu": ("pallu_image", "pallu_keypoints"),
-}
+# role -> (image_field, keypoints_field) in the catalog JSON shape.
+# (No multi-piece categories remain; kept empty for schema compatibility.)
+_PIECE_FIELDS: dict[str, tuple[str, str]] = {}
 
 
 def serialize(g: Garment) -> dict:
@@ -78,24 +76,14 @@ async def get_by_id(session: AsyncSession, gid: str) -> Garment | None:
 _REQUIRED_KP = {
     "top": {"left_shoulder", "right_shoulder", "left_hem", "right_hem"},
     "pant": {"left_waist", "right_waist", "left_ankle", "right_ankle"},
-    "skirt": {"left_waist", "right_waist", "left_hem", "right_hem"},
-    "dupatta": {"left_shoulder", "right_shoulder", "left_hem", "right_hem"},
-    "pallu": {"top_left", "top_right", "left_hem", "right_hem"},
 }
-_PANT_CATS = {"pant", "salwar", "palazzo", "trouser", "trousers"}
-_SKIRT_CATS = {"skirt", "lehenga", "saree"}
+_PANT_CATS = {"pant", "trouser", "trousers"}
 
 
 def _kp_kind(category: str, role: str | None = None) -> str:
     c = (role or category or "").lower()
     if c in _PANT_CATS:
         return "pant"
-    if c in _SKIRT_CATS:
-        return "skirt"
-    if c == "dupatta":
-        return "dupatta"
-    if c == "pallu":
-        return "pallu"
     return "top"
 
 

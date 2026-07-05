@@ -32,9 +32,9 @@ def _vton_category(category: str) -> str:
     c = (category or "").lower()
     if c == "pant":
         return "lower_body"
-    if c in ("dress", "saree", "lehenga", "gown"):
+    if c in ("dress", "gown"):
         return "dresses"
-    return "upper_body"  # shirts/tees/kurtas/etc
+    return "upper_body"  # shirts/tees/fullsleeves/etc
 
 
 class InferenceEngine:

@@ -38,6 +38,7 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
   const [debug, setDebug] = useState(false);
   const [lighting, setLighting] = useState(false);
   const [tps, setTps] = useState(false);
+  const [occlude, setOcclude] = useState(true);
   const [hdProgress, setHdProgress] = useState<number | null>(null);
   const [hdMessage, setHdMessage] = useState("");
   const [hdEngine, setHdEngine] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
     setLoading(true);
     setError(null);
     try {
-      const r = await requestTryOn(selectedGarment.id, photo, { debug, lighting, tps });
+      const r = await requestTryOn(selectedGarment.id, photo, { debug, lighting, tps, occlude });
       setResult(r);
       saveToGallery(r, "image");
     } catch (e: any) {
@@ -179,6 +180,10 @@ export default function ResultView({ onGalleryUpdate }: { onGalleryUpdate?: () =
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={tps} onChange={(e) => setTps(e.target.checked)} />
           TPS warp (tops)
+        </label>
+        <label className="flex items-center gap-1.5" title="Keep crossed arms in front of the garment">
+          <input type="checkbox" checked={occlude} onChange={(e) => setOcclude(e.target.checked)} />
+          Arm occlusion
         </label>
       </div>
 

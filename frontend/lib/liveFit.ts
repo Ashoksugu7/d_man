@@ -18,23 +18,13 @@ export const PANT_FIT = {
   ankleExtend: 1.02,
 };
 
-// Skirt fit — mirror backend/app/warp.py SkirtFitParams.
-export const SKIRT_FIT = { waistWiden: 1.1, waistLift: 0.06, hemDrop: 0.85, hemFlare: 2.4 };
-
-// Per-category hem length for tops (kurta is long, dupatta drapes lower).
-// Mirrors backend _TOP_FIT hem_extend values.
-const TOP_HEM: Record<string, number> = { kurta: 2.35, dupatta: 1.75, blouse: 0.95 };
-
-export type Kind = "top" | "pant" | "skirt" | "lehenga";
+export type Kind = "top" | "pant";
 export function kindFor(category?: string): Kind {
   const c = (category || "").toLowerCase();
-  if (["pant", "salwar", "palazzo", "trouser", "trousers"].includes(c)) return "pant";
-  if (c === "skirt") return "skirt";
-  if (c === "lehenga") return "lehenga";
-  return "top"; // shirt, tshirt, kurta, dupatta, blouse, ...
+  if (["pant", "trouser", "trousers"].includes(c)) return "pant";
+  return "top"; // shirt, tshirt, fullsleeve, ...
 }
-export const topHem = (category?: string) =>
-  TOP_HEM[(category || "").toLowerCase()] ?? FIT.hemExtend;
+export const topHem = (_category?: string) => FIT.hemExtend;
 
 // MediaPipe Pose landmark indices we use.
 export const LM = {
@@ -53,30 +43,106 @@ export const LM = {
 } as const;
 
 /**
- * Exponential moving average smoother for a set of named 2D points.
- * Reduces per-frame jitter in pose landmarks. alpha in (0,1]: higher = more
- * responsive, lower = smoother.
+ * One Euro filter (Casiez et al.) for a single scalar signal.
+ *
+ * Adaptive low-pass: when the signal is slow (standing still) the cutoff is
+ * low, so sensor jitter is smoothed away almost entirely; when the signal
+ * moves fast the cutoff rises, so there is no visible lag. This is the
+ * standard filter for stabilizing pose/hand landmarks.
  */
-export class EMASmoother {
-  private prev: Record<string, Pt> = {};
-  constructor(private alpha = 0.4) {}
+class OneEuro1D {
+  private xPrev: number | null = null;
+  private dxPrev = 0;
+  private tPrev = 0;
 
-  reset() {
-    this.prev = {};
+  constructor(
+    private minCutoff: number,
+    private beta: number,
+    private dCutoff: number
+  ) {}
+
+  private alpha(cutoff: number, dt: number) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
   }
 
-  smooth(points: Record<string, Pt>): Record<string, Pt> {
-    const out: Record<string, Pt> = {};
-    for (const k of Object.keys(points)) {
-      const p = points[k];
-      const prev = this.prev[k];
-      out[k] = prev
-        ? { x: this.alpha * p.x + (1 - this.alpha) * prev.x,
-            y: this.alpha * p.y + (1 - this.alpha) * prev.y }
-        : p;
-      this.prev[k] = out[k];
+  filter(x: number, tSec: number): number {
+    if (this.xPrev == null) {
+      this.xPrev = x;
+      this.tPrev = tSec;
+      return x;
     }
-    return out;
+    const dt = Math.max(1e-3, tSec - this.tPrev);
+    this.tPrev = tSec;
+    const dx = (x - this.xPrev) / dt;
+    const aD = this.alpha(this.dCutoff, dt);
+    this.dxPrev = aD * dx + (1 - aD) * this.dxPrev;
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dxPrev);
+    const a = this.alpha(cutoff, dt);
+    this.xPrev = a * x + (1 - a) * this.xPrev;
+    return this.xPrev;
+  }
+
+  reset() {
+    this.xPrev = null;
+    this.dxPrev = 0;
+  }
+}
+
+/**
+ * One-Euro smoother for a set of named 2D points, plus a GROUP deadband:
+ * if no point moved more than `deadbandPx` since the last released output,
+ * the entire previous output is returned unchanged. Holding all points
+ * together (instead of per-point) means the garment can neither drift nor
+ * change shape from sub-pixel landmark noise while the user stands still.
+ *
+ * Tuning: raise `minCutoff` if the overlay lags; lower it if it still
+ * jitters. `beta` controls how quickly smoothing releases during motion.
+ */
+export class OneEuroSmoother {
+  private fx = new Map<string, OneEuro1D>();
+  private fy = new Map<string, OneEuro1D>();
+  private held: Record<string, Pt> | null = null;
+
+  constructor(
+    private minCutoff = 0.8,
+    private beta = 0.008,
+    private dCutoff = 1.0,
+    private deadbandPx = 2.0
+  ) {}
+
+  reset() {
+    this.fx.clear();
+    this.fy.clear();
+    this.held = null;
+  }
+
+  smooth(points: Record<string, Pt>, tMs?: number): Record<string, Pt> {
+    const t =
+      (tMs ??
+        (typeof performance !== "undefined" ? performance.now() : Date.now())) /
+      1000;
+    const cand: Record<string, Pt> = {};
+    for (const k of Object.keys(points)) {
+      let fx = this.fx.get(k);
+      let fy = this.fy.get(k);
+      if (!fx || !fy) {
+        fx = new OneEuro1D(this.minCutoff, this.beta, this.dCutoff);
+        fy = new OneEuro1D(this.minCutoff, this.beta, this.dCutoff);
+        this.fx.set(k, fx);
+        this.fy.set(k, fy);
+      }
+      cand[k] = { x: fx.filter(points[k].x, t), y: fy.filter(points[k].y, t) };
+    }
+    // group hold: release only when SOME point really moved
+    const h = this.held;
+    if (h && Object.keys(cand).every((k) =>
+      h[k] && Math.hypot(cand[k].x - h[k].x, cand[k].y - h[k].y) < this.deadbandPx
+    )) {
+      return { ...h };
+    }
+    this.held = cand;
+    return { ...cand };
   }
 }
 
@@ -127,23 +193,6 @@ export function bodyTargets(
   const ls = sub(add(shMid, scale(sub(b.leftShoulder, shMid), FIT.shoulderWiden)), lift);
   const hemMid = sub(add(shMid, scale(torso, hemExtend)), lift);
   return { rs, ls, hemMid };
-}
-
-/** Skirt destination points: waist (at hips) + flared hem midpoint. */
-export function skirtTargets(b: {
-  rightHip: Pt;
-  leftHip: Pt;
-  rightAnkle: Pt;
-  leftAnkle: Pt;
-}) {
-  const hipMid = mid(b.rightHip, b.leftHip);
-  const ankleMid = mid(b.rightAnkle, b.leftAnkle);
-  const down = sub(ankleMid, hipMid);
-  const lift = scale(down, SKIRT_FIT.waistLift);
-  const rw = sub(add(hipMid, scale(sub(b.rightHip, hipMid), SKIRT_FIT.waistWiden)), lift);
-  const lw = sub(add(hipMid, scale(sub(b.leftHip, hipMid), SKIRT_FIT.waistWiden)), lift);
-  const hemMid = add(hipMid, scale(down, SKIRT_FIT.hemDrop));
-  return { rw, lw, hemMid };
 }
 
 /**

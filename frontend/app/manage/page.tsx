@@ -7,7 +7,7 @@ import { CATEGORIES, schemeFor, sizeChartFor } from "@/lib/annotation";
 import {
   assetUrl, fetchGarments, createGarment, updateGarment,
   archiveGarment, uploadGarmentImage, saveAnnotation,
-  listVersions, revertVersion,
+  listVersions, revertVersion, deleteGarment,
 } from "@/lib/api";
 import type { Garment } from "@/lib/store";
 
@@ -44,6 +44,11 @@ export default function ManagePage() {
           garments={garments}
           onEdit={(g) => setMode({ kind: "edit", garment: g })}
           onArchive={async (id) => { await archiveGarment(id); refresh(); }}
+          onDelete={async (id) => {
+            if (confirm(`Permanently delete "${id}" and all its files?`)) {
+              await deleteGarment(id); refresh();
+            }
+          }}
         />
       ) : (
         <GarmentEditor
@@ -56,10 +61,11 @@ export default function ManagePage() {
   );
 }
 
-function GarmentList({ garments, onEdit, onArchive }: {
+function GarmentList({ garments, onEdit, onArchive, onDelete }: {
   garments: Garment[];
   onEdit: (g: Garment) => void;
   onArchive: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   if (!garments.length)
     return <p className="text-sm text-neutral-400">No garments yet. Create one, or check the backend is running.</p>;
@@ -75,7 +81,8 @@ function GarmentList({ garments, onEdit, onArchive }: {
           <p className="text-[11px] text-neutral-400">{g.category}</p>
           <div className="mt-1 flex gap-2 text-[11px]">
             <button onClick={() => onEdit(g)} className="text-blue-600">Edit</button>
-            <button onClick={() => onArchive(g.id)} className="text-red-600">Archive</button>
+            <button onClick={() => onArchive(g.id)} className="text-amber-600">Archive</button>
+            <button onClick={() => onDelete(g.id)} className="text-red-600">Delete</button>
           </div>
         </div>
       ))}
@@ -214,12 +221,6 @@ function GarmentEditor({ garment, onDone, onCancel }: {
             Overrides the default warp for this garment (hem_extend / shoulder_widen).
           </p>
         </details>
-        {(category === "lehenga" || category === "saree") && (
-          <p className="rounded bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
-            {category} is multi-piece — this editor annotates the primary piece; add
-            blouse/pallu via the API for now.
-          </p>
-        )}
         <div className="flex gap-2">
           <button onClick={save} disabled={busy}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:bg-neutral-300">
@@ -255,3 +256,4 @@ function GarmentEditor({ garment, onDone, onCancel }: {
     </div>
   );
 }
+

@@ -120,6 +120,10 @@ export const updateGarment = (id: string, b: Record<string, unknown>) =>
 export const archiveGarment = (id: string) =>
   fetch(`${API_BASE}/api/garments/${id}`, { method: "DELETE" }).then((r) => r.json());
 
+/** Permanently delete a garment (DB row + all files). */
+export const deleteGarment = (id: string) =>
+  fetch(`${API_BASE}/api/garments/${id}?hard=true`, { method: "DELETE" }).then((r) => r.json());
+
 export async function uploadGarmentImage(
   id: string, file: File, role?: string, removeBg = false
 ) {

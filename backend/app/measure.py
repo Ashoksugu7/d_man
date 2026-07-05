@@ -48,8 +48,8 @@ WAIST_TAPER = 0.92  # waist circumference ~= 0.92 * hip-ellipse circumference
 # Fit tolerance: within +/- this many cm of the chart value counts as a clean fit.
 FIT_TOLERANCE_CM = 3.0
 
-TOP_CATEGORIES = {"shirt", "tshirt", "polo", "kurta", "henley", "top"}
-PANT_CATEGORIES = {"pant", "pants", "trouser", "trousers", "jeans", "chino", "salwar"}
+TOP_CATEGORIES = {"shirt", "tshirt", "fullsleeve", "polo", "henley", "top"}
+PANT_CATEGORIES = {"pant", "pants", "trouser", "trousers", "jeans", "chino"}
 
 
 def _dist(a: Tuple[float, float], b: Tuple[float, float]) -> float:

@@ -8,9 +8,8 @@ Endpoints (mounted under /api/garments):
     POST   /{id}/image        upload/replace image (multipart; optional role)
     POST   /{id}/annotation   save keypoints (JSON; optional role)
 
-`role` (blouse|skirt|drape|pallu) targets a multi-piece sub-garment; omit it for
-the primary garment. Images are stored on disk under assets/garments/ (served by
-/assets) and paths recorded in the DB.
+Images are stored on disk under assets/garments/ (served by /assets) and paths
+recorded in the DB.
 """
 from __future__ import annotations
 
@@ -117,14 +116,32 @@ async def update(gid: str, body: GarmentUpdate,
 
 
 @router.delete("/{gid}")
-async def archive(gid: str, session: AsyncSession = Depends(get_session)):
+async def archive(gid: str, hard: bool = False,
+                  session: AsyncSession = Depends(get_session)):
+    """Archive (soft delete) a garment; `?hard=true` permanently deletes the
+    DB row, its pieces and all files on disk."""
     g = await get_by_id(session, gid)
     if not g:
         raise HTTPException(404, "garment not found")
-    g.status = "archived"
+    if not hard:
+        g.status = "archived"
+        await session.commit()
+        await export_catalog(session)
+        return {"id": gid, "status": "archived"}
+
+    rels = [g.image_path, g.keypoints_path,
+            f"garments/{gid}_mannequin.png", f"garments/thumbs/{gid}.webp"]
+    for p in g.pieces:
+        rels += [p.image_path, p.keypoints_path]
+    for rel in rels:
+        storage.delete_rel(rel)
+    from sqlalchemy import delete as sa_delete
+    await session.execute(sa_delete(AnnotationVersion)
+                          .where(AnnotationVersion.garment_id == gid))
+    await session.delete(g)
     await session.commit()
     await export_catalog(session)
-    return {"id": gid, "status": "archived"}
+    return {"id": gid, "status": "deleted"}
 
 
 @router.post("/{gid}/image")

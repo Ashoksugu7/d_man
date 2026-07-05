@@ -2,11 +2,19 @@
 
 import { useRef, useState } from "react";
 
-/** Draggable before/after comparison slider. */
+/** Draggable before/after comparison slider.
+ *
+ * Both images are rendered identically (absolute, object-contain) and the
+ * "before" layer is revealed with clip-path — so they are always perfectly
+ * aligned and scaled, regardless of container size or render timing. The
+ * container adopts the result image's own aspect ratio, so there is no
+ * letterboxing around photos that aren't 3:4.
+ */
 export default function BeforeAfter({
   before, after, alt = "result",
 }: { before: string; after: string; alt?: string }) {
-  const [pos, setPos] = useState(50); // % from left where "after" is revealed
+  const [pos, setPos] = useState(50); // % from left where "before" ends
+  const [aspect, setAspect] = useState<number | null>(null); // w/h of result
   const boxRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
@@ -17,10 +25,12 @@ export default function BeforeAfter({
     setPos(Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100)));
   }
 
+  const img = "pointer-events-none absolute inset-0 h-full w-full object-contain";
   return (
     <div
       ref={boxRef}
-      className="relative aspect-[3/4] w-full select-none overflow-hidden rounded-lg border border-neutral-200 bg-white"
+      className="relative w-full select-none overflow-hidden rounded-lg border border-neutral-200 bg-white"
+      style={{ aspectRatio: aspect ?? 3 / 4 }}
       onMouseDown={(e) => { dragging.current = true; setFromClientX(e.clientX); }}
       onMouseMove={(e) => dragging.current && setFromClientX(e.clientX)}
       onMouseUp={() => (dragging.current = false)}
@@ -28,15 +38,26 @@ export default function BeforeAfter({
       onTouchStart={(e) => setFromClientX(e.touches[0].clientX)}
       onTouchMove={(e) => setFromClientX(e.touches[0].clientX)}
     >
-      {/* after (full) */}
+      {/* after (full) — its natural size also sets the container aspect */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={after} alt={alt} className="absolute inset-0 h-full w-full object-contain" />
-      {/* before (clipped to the left of the handle) */}
-      <div className="absolute inset-0 overflow-hidden" style={{ width: `${pos}%` }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={before} alt="before" className="h-full w-full object-contain"
-          style={{ width: boxRef.current ? boxRef.current.clientWidth : "100%", maxWidth: "none" }} />
-      </div>
+      <img
+        src={after}
+        alt={alt}
+        className={img}
+        onLoad={(e) => {
+          const el = e.currentTarget;
+          if (el.naturalWidth && el.naturalHeight)
+            setAspect(el.naturalWidth / el.naturalHeight);
+        }}
+      />
+      {/* before — same geometry, revealed left of the handle via clip-path */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={before}
+        alt="before"
+        className={img}
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+      />
       {/* labels */}
       <span className="absolute left-1 top-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">Before</span>
       <span className="absolute right-1 top-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">After</span>

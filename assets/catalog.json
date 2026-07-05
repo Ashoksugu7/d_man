@@ -99,5 +99,31 @@
       }
     },
     "thumbnail": "garments/thumbs/back_full_hand.webp"
+  },
+  {
+    "id": "tt",
+    "name": "tt",
+    "category": "fullsleeve",
+    "image": "garments/tt.png",
+    "keypoints": "garments/tt.json",
+    "size_chart": {
+      "L": {
+        "length_cm": 74,
+        "shoulder_cm": 48
+      },
+      "M": {
+        "length_cm": 71,
+        "shoulder_cm": 45
+      },
+      "S": {
+        "length_cm": 68,
+        "shoulder_cm": 42
+      },
+      "XL": {
+        "length_cm": 77,
+        "shoulder_cm": 51
+      }
+    },
+    "thumbnail": "garments/thumbs/tt.webp"
   }
 ]
